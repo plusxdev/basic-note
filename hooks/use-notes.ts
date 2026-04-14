@@ -23,10 +23,13 @@ export function useNotes(categoryId?: string | null) {
     async () => {
       const all = await db.notes.orderBy("updatedAt").reverse().toArray();
       const active = all.filter((n) => !n.deletedAt);
-      if (categoryId !== undefined && categoryId !== null) {
-        return active.filter((n) => n.categoryId === categoryId);
-      }
-      return active;
+      const filtered = (categoryId !== undefined && categoryId !== null)
+        ? active.filter((n) => n.categoryId === categoryId)
+        : active;
+      // Pinned notes always on top
+      const pinned = filtered.filter((n) => n.pinned);
+      const unpinned = filtered.filter((n) => !n.pinned);
+      return [...pinned, ...unpinned];
     },
     [categoryId],
     [] as Note[]
