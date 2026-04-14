@@ -136,6 +136,18 @@
     @apply font-sans;
   }
 
+  /* Sidebar: remove right border */
+  [data-slot="sidebar-container"][data-side="left"] {
+    border-right: none !important;
+    border-color: transparent !important;
+  }
+
+  /* Sidebar: all interactive elements transparent at rest */
+  [data-sidebar="menu-button"],
+  [data-sidebar="menu-sub-button"] {
+    background-color: transparent !important;
+  }
+
   /* Block editor placeholder */
   [contenteditable]:empty::before {
     content: attr(data-placeholder);

@@ -46,12 +46,47 @@ interface CryptoContextValue {
   decryptText: (encrypted: string) => Promise<string>;
 }
 
+const SESSION_PW_KEY = "bn_session_pw";
+const SESSION_TS_KEY = "bn_session_ts";
+
+function saveSession(password: string) {
+  try {
+    sessionStorage.setItem(SESSION_PW_KEY, password);
+    sessionStorage.setItem(SESSION_TS_KEY, String(Date.now()));
+  } catch {}
+}
+
+function loadSession(timeoutMinutes: number): string | null {
+  try {
+    if (timeoutMinutes === 0) return null;
+    const pw = sessionStorage.getItem(SESSION_PW_KEY);
+    const ts = sessionStorage.getItem(SESSION_TS_KEY);
+    if (!pw || !ts) return null;
+    const elapsed = Date.now() - Number(ts);
+    if (elapsed > timeoutMinutes * 60 * 1000) {
+      clearSession();
+      return null;
+    }
+    return pw;
+  } catch {
+    return null;
+  }
+}
+
+function clearSession() {
+  try {
+    sessionStorage.removeItem(SESSION_PW_KEY);
+    sessionStorage.removeItem(SESSION_TS_KEY);
+  } catch {}
+}
+
 const CryptoContext = createContext<CryptoContextValue | null>(null);
 
 export function CryptoProvider({ children }: { children: ReactNode }) {
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoUnlockAttempted = useRef(false);
 
   // null = still loading, undefined = no settings, AppSettings = has settings
   const settings = useLiveQuery(() => db.settings.get("settings"), [], null);
@@ -78,6 +113,27 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoading(false));
   }, [settings]);
 
+  // Auto-unlock from session on refresh
+  useEffect(() => {
+    if (autoUnlockAttempted.current || !settings || cryptoKey) return;
+    autoUnlockAttempted.current = true;
+    const timeout = settings.lockTimeoutMinutes ?? DEFAULT_LOCK_TIMEOUT_MINUTES;
+    const savedPw = loadSession(timeout);
+    if (!savedPw) return;
+    verifyPassword(savedPw, settings.encryptionSalt, settings.encryptionVerifier)
+      .then((key) => {
+        if (key) {
+          setCryptoKey(key);
+          saveSession(savedPw);
+          syncPush().then(() => syncPull());
+          startAutoSync();
+        } else {
+          clearSession();
+        }
+      })
+      .catch(() => clearSession());
+  }, [settings, cryptoKey]);
+
   // Safety timeout: force loading off if stuck (e.g. IndexedDB blocked)
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 5000);
@@ -88,9 +144,15 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
   const resetIdleTimer = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     if (!cryptoKey) return;
+    // Refresh session timestamp on activity
+    try {
+      const pw = sessionStorage.getItem(SESSION_PW_KEY);
+      if (pw) sessionStorage.setItem(SESSION_TS_KEY, String(Date.now()));
+    } catch {}
 
     const timeout = settings?.lockTimeoutMinutes ?? DEFAULT_LOCK_TIMEOUT_MINUTES;
     idleTimerRef.current = setTimeout(() => {
+      clearSession();
       setCryptoKey(null);
     }, timeout * 60 * 1000);
   }, [cryptoKey, settings?.lockTimeoutMinutes]);
@@ -122,7 +184,7 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
       updatedAt: now,
     });
     setCryptoKey(key);
-    // Push settings to remote so other devices can use same password
+    saveSession(password);
     await syncPushSettings();
     startAutoSync();
   }, []);
@@ -137,7 +199,7 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
       );
       if (key) {
         setCryptoKey(key);
-        // Full sync: push all local → pull remote, then auto-sync
+        saveSession(password);
         syncPush().then(() => syncPull());
         startAutoSync();
         return true;
@@ -149,6 +211,7 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
 
   const lock = useCallback(() => {
     stopAutoSync();
+    clearSession();
     setCryptoKey(null);
   }, []);
 

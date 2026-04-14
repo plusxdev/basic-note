@@ -10,13 +10,11 @@ import { NoteListItem } from "./note-list-item";
 interface NoteListProps {
   categoryId?: string | null;
   title?: string;
-  description?: string;
 }
 
 export function NoteList({
   categoryId,
   title = "모든 노트",
-  description = "모든 노트를 한눈에 확인하세요",
 }: NoteListProps) {
   const { notes, createNote, moveToCategory } = useNotes(categoryId);
   const { categories } = useCategories();
@@ -32,7 +30,6 @@ export function NoteList({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-          <p className="text-sm text-muted-foreground mt-1">{description}</p>
         </div>
         <Button onClick={handleCreate}>
           <Plus className="mr-2 h-4 w-4" />
@@ -46,9 +43,6 @@ export function NoteList({
             <FileText className="h-8 w-8 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-medium">노트가 없습니다</h3>
-          <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-            새 노트를 만들어 시작하세요
-          </p>
         </div>
       ) : (
         <div className="grid gap-3">

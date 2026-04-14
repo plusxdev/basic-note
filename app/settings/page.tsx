@@ -15,9 +15,6 @@ export default function SettingsPage() {
           <Settings className="h-8 w-8 text-muted-foreground" />
         </div>
         <h3 className="text-lg font-medium">설정</h3>
-        <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-          Phase 7에서 구현 예정
-        </p>
       </div>
     </div>
   );

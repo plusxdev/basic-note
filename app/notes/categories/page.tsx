@@ -117,9 +117,6 @@ export default function CategoriesPage() {
             <FolderTree className="h-8 w-8 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-medium">카테고리가 없습니다</h3>
-          <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-            카테고리를 만들어 노트를 분류하세요
-          </p>
         </div>
       ) : (
         <AccordionBlock type="multiple">

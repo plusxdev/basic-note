@@ -23,6 +23,17 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSeparator,
 } from "@minnjii/dx-kit/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@minnjii/dx-kit/ui/alert-dialog";
 import { useCategories } from "@/hooks/use-categories";
 import { ArrowLeft, MoreHorizontal, Trash2, Pin, PinOff, FolderInput, Folder, Inbox, Check, CalendarIcon } from "lucide-react";
 
@@ -71,7 +82,7 @@ export default function NoteEditorPage({
   }
 
   return (
-    <div className="mx-auto max-w-3xl grid gap-6">
+    <div className="max-w-3xl grid gap-6">
       {/* Toolbar */}
       <div className="flex items-center justify-between">
         <Button
@@ -138,13 +149,31 @@ export default function NoteEditorPage({
                 <DropdownMenuSeparator />
               </>
             )}
-            <DropdownMenuItem
-              onClick={handleDelete}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              삭제
-            </DropdownMenuItem>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <DropdownMenuItem
+                  onSelect={(e) => e.preventDefault()}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  삭제
+                </DropdownMenuItem>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>노트 삭제</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    이 노트를 삭제하시겠습니까?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>취소</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete}>
+                    삭제
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

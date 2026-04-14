@@ -17,6 +17,17 @@ import {
   CollapsibleTrigger,
   CollapsibleContent,
 } from "@minnjii/dx-kit/ui/collapsible";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@minnjii/dx-kit/ui/alert-dialog";
 import { Folder, ChevronRight, Trash2 } from "lucide-react";
 import { useCategories } from "@/hooks/use-categories";
 import type { CategoryTreeNode } from "@/lib/types";
@@ -40,12 +51,27 @@ function CategoryNode({ node, depth = 0 }: { node: CategoryTreeNode; depth?: num
           {node.noteCount > 0 && (
             <SidebarMenuBadge>{node.noteCount}</SidebarMenuBadge>
           )}
-          <SidebarMenuAction
-            showOnHover
-            onClick={() => deleteCategory(node.id)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </SidebarMenuAction>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <SidebarMenuAction showOnHover>
+                <Trash2 className="h-3.5 w-3.5" />
+              </SidebarMenuAction>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>카테고리 삭제</AlertDialogTitle>
+                <AlertDialogDescription>
+                  &quot;{node.name}&quot; 카테고리를 삭제하시겠습니까?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>취소</AlertDialogCancel>
+                <AlertDialogAction onClick={() => deleteCategory(node.id)}>
+                  삭제
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <CollapsibleContent>
             <SidebarMenuSub>
               {/* Link to this category's notes */}
@@ -91,12 +117,27 @@ function CategoryNode({ node, depth = 0 }: { node: CategoryTreeNode; depth?: num
       {node.noteCount > 0 && (
         <SidebarMenuBadge>{node.noteCount}</SidebarMenuBadge>
       )}
-      <SidebarMenuAction
-        showOnHover
-        onClick={() => deleteCategory(node.id)}
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </SidebarMenuAction>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <SidebarMenuAction showOnHover>
+            <Trash2 className="h-3.5 w-3.5" />
+          </SidebarMenuAction>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>카테고리 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              &quot;{node.name}&quot; 카테고리를 삭제하시겠습니까?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteCategory(node.id)}>
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarMenuItem>
   );
 }

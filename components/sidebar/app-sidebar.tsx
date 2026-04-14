@@ -64,7 +64,7 @@ export function AppSidebar() {
       <SidebarContent>
         {/* Navigation */}
         <SidebarGroup>
-          <SidebarGroupLabel>탐색</SidebarGroupLabel>
+          <SidebarGroupLabel className="sr-only">탐색</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {NAV_ITEMS.map((item) => (
@@ -75,7 +75,6 @@ export function AppSidebar() {
                     tooltip={item.label}
                   >
                     <Link href={item.href}>
-                      <item.icon />
                       <span>{item.label}</span>
                     </Link>
                   </SidebarMenuButton>
@@ -85,18 +84,16 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarSeparator />
-
         {/* Categories */}
-        <SidebarGroup>
-          <SidebarGroupLabel>카테고리</SidebarGroupLabel>
-          <SidebarGroupAction
-            title="카테고리 추가"
-            onClick={() => setCategoryDialogOpen(true)}
-          >
-            <Plus />
-          </SidebarGroupAction>
+        <SidebarGroup className="mt-[9px]">
           <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton onClick={() => setCategoryDialogOpen(true)} tooltip="카테고리 추가">
+                  <Plus className="h-4 w-4" />
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
             <CategoryTree />
           </SidebarGroupContent>
         </SidebarGroup>
