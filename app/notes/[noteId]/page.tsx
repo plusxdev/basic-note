@@ -9,13 +9,22 @@ import { useNotes } from "@/hooks/use-notes";
 import { BlockEditor } from "@/components/editor/block-editor";
 import { NoteTitle } from "@/components/editor/note-title";
 import { Button } from "@minnjii/dx-kit/ui/button";
+import { Popover, PopoverTrigger, PopoverContent } from "@minnjii/dx-kit/ui/popover";
+import { Calendar } from "@minnjii/dx-kit/ui/calendar";
+import { ko } from "date-fns/locale";
+import { format } from "date-fns";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuSeparator,
 } from "@minnjii/dx-kit/ui/dropdown-menu";
-import { ArrowLeft, MoreHorizontal, Trash2, Pin, PinOff } from "lucide-react";
+import { useCategories } from "@/hooks/use-categories";
+import { ArrowLeft, MoreHorizontal, Trash2, Pin, PinOff, FolderInput, Folder, Inbox, Check, CalendarIcon } from "lucide-react";
 
 export default function NoteEditorPage({
   params,
@@ -25,7 +34,8 @@ export default function NoteEditorPage({
   const { noteId } = use(params);
   const router = useRouter();
   const { decryptText } = useCrypto();
-  const { updateNoteTitle, deleteNote, togglePin } = useNotes();
+  const { updateNoteTitle, updateNoteDate, deleteNote, togglePin, moveToCategory } = useNotes();
+  const { categories } = useCategories();
 
   const [title, setTitle] = useState("");
   const titleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -92,6 +102,42 @@ export default function NoteEditorPage({
                 </>
               )}
             </DropdownMenuItem>
+            {categories.length > 0 && (
+              <>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <FolderInput className="mr-2 h-4 w-4" />
+                    카테고리
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuItem
+                      onClick={() => moveToCategory(noteId, null)}
+                      disabled={!note.categoryId}
+                    >
+                      <Inbox className="mr-2 h-4 w-4" />
+                      미분류
+                      {!note.categoryId && (
+                        <Check className="ml-auto h-3.5 w-3.5" />
+                      )}
+                    </DropdownMenuItem>
+                    {categories.map((cat) => (
+                      <DropdownMenuItem
+                        key={cat.id}
+                        onClick={() => moveToCategory(noteId, cat.id)}
+                        disabled={note.categoryId === cat.id}
+                      >
+                        <Folder className="mr-2 h-4 w-4" />
+                        {cat.name}
+                        {note.categoryId === cat.id && (
+                          <Check className="ml-auto h-3.5 w-3.5" />
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuItem
               onClick={handleDelete}
               className="text-destructive focus:text-destructive"
@@ -103,22 +149,43 @@ export default function NoteEditorPage({
         </DropdownMenu>
       </div>
 
-      {/* Title */}
-      <NoteTitle
-        title={title}
-        onTitleChange={handleTitleChange}
-        onEnter={() => {
-          // Focus first block
-          const firstEditable = document.querySelector<HTMLElement>(
-            "[contenteditable]"
-          );
-          // Skip title itself, focus the second contenteditable
-          const all = document.querySelectorAll<HTMLElement>(
-            "[contenteditable]"
-          );
-          if (all.length > 1) all[1].focus();
-        }}
-      />
+      {/* Title + Date */}
+      <div className="flex items-start gap-4">
+        <div className="flex-1 min-w-0">
+          <NoteTitle
+            title={title}
+            onTitleChange={handleTitleChange}
+            onEnter={() => {
+              const all = document.querySelectorAll<HTMLElement>(
+                "[contenteditable]"
+              );
+              if (all.length > 1) all[1].focus();
+            }}
+          />
+        </div>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="shrink-0 text-muted-foreground mt-1.5"
+            >
+              <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+              {format(note.createdAt, "M월 d일", { locale: ko })}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <Calendar
+              mode="single"
+              selected={new Date(note.createdAt)}
+              onSelect={(date) => {
+                if (date) updateNoteDate(noteId, date.getTime());
+              }}
+              locale={ko}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
 
       {/* Block Editor */}
       <BlockEditor noteId={noteId} />

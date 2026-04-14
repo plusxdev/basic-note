@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@minnjii/dx-kit/ui/button";
 import { Plus, FileText } from "lucide-react";
 import { useNotes } from "@/hooks/use-notes";
+import { useCategories } from "@/hooks/use-categories";
 import { NoteListItem } from "./note-list-item";
 
 interface NoteListProps {
@@ -17,7 +18,8 @@ export function NoteList({
   title = "모든 노트",
   description = "모든 노트를 한눈에 확인하세요",
 }: NoteListProps) {
-  const { notes, createNote } = useNotes(categoryId);
+  const { notes, createNote, moveToCategory } = useNotes(categoryId);
+  const { categories } = useCategories();
   const router = useRouter();
 
   const handleCreate = async () => {
@@ -51,7 +53,12 @@ export function NoteList({
       ) : (
         <div className="grid gap-3">
           {notes.map((note) => (
-            <NoteListItem key={note.id} note={note} />
+            <NoteListItem
+              key={note.id}
+              note={note}
+              categories={categories}
+              onMoveToCategory={moveToCategory}
+            />
           ))}
         </div>
       )}

@@ -155,6 +155,15 @@ export function useNotes(categoryId?: string | null) {
     }
   }, []);
 
+  const updateNoteDate = useCallback(async (id: string, date: number) => {
+    await db.notes.update(id, {
+      createdAt: date,
+      updatedAt: Date.now(),
+    });
+    const updated = await db.notes.get(id);
+    if (updated) syncPushEntity("note", updated);
+  }, []);
+
   const moveToCategory = useCallback(async (noteId: string, categoryId: string | null) => {
     await db.notes.update(noteId, {
       categoryId,
@@ -169,6 +178,7 @@ export function useNotes(categoryId?: string | null) {
     createNote,
     deleteNote,
     updateNoteTitle,
+    updateNoteDate,
     togglePin,
     moveToCategory,
   };

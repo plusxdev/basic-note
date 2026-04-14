@@ -15,15 +15,19 @@ import { useCategories } from "@/hooks/use-categories";
 import { useNotes } from "@/hooks/use-notes";
 import { NoteListItem } from "@/components/notes/note-list-item";
 import { CategoryDialog } from "@/components/dialogs/category-dialog";
-import type { CategoryTreeNode } from "@/lib/types";
+import type { Category, CategoryTreeNode } from "@/lib/types";
 import type { DecryptedNote } from "@/hooks/use-notes";
 
 function CategoryBranch({
   node,
   allNotes,
+  categories,
+  onMoveToCategory,
 }: {
   node: CategoryTreeNode;
   allNotes: DecryptedNote[];
+  categories: Category[];
+  onMoveToCategory: (noteId: string, categoryId: string | null) => void;
 }) {
   const categoryNotes = allNotes.filter((n) => n.categoryId === node.id);
 
@@ -47,7 +51,12 @@ function CategoryBranch({
         ) : (
           <div className="grid gap-2">
             {categoryNotes.map((note) => (
-              <NoteListItem key={note.id} note={note} />
+              <NoteListItem
+                key={note.id}
+                note={note}
+                categories={categories}
+                onMoveToCategory={onMoveToCategory}
+              />
             ))}
           </div>
         )}
@@ -59,6 +68,8 @@ function CategoryBranch({
                   key={child.id}
                   node={child}
                   allNotes={allNotes}
+                  categories={categories}
+                  onMoveToCategory={onMoveToCategory}
                 />
               ))}
             </AccordionBlock>
@@ -70,8 +81,8 @@ function CategoryBranch({
 }
 
 export default function CategoriesPage() {
-  const { tree, createCategory } = useCategories();
-  const { notes, createNote } = useNotes();
+  const { tree, categories, createCategory } = useCategories();
+  const { notes, createNote, moveToCategory } = useNotes();
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -116,7 +127,13 @@ export default function CategoriesPage() {
       ) : (
         <AccordionBlock type="multiple">
           {tree.map((node) => (
-            <CategoryBranch key={node.id} node={node} allNotes={notes} />
+            <CategoryBranch
+              key={node.id}
+              node={node}
+              allNotes={notes}
+              categories={categories}
+              onMoveToCategory={moveToCategory}
+            />
           ))}
 
           {uncategorizedNotes.length > 0 && (
@@ -136,7 +153,12 @@ export default function CategoriesPage() {
               <AccordionBlockContent>
                 <div className="grid gap-2">
                   {uncategorizedNotes.map((note) => (
-                    <NoteListItem key={note.id} note={note} />
+                    <NoteListItem
+                      key={note.id}
+                      note={note}
+                      categories={categories}
+                      onMoveToCategory={moveToCategory}
+                    />
                   ))}
                 </div>
               </AccordionBlockContent>

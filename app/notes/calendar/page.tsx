@@ -10,11 +10,13 @@ import { Plus, FileText } from "lucide-react";
 import { ko } from "date-fns/locale";
 import { format, startOfDay, isSameDay } from "date-fns";
 import { useNotes } from "@/hooks/use-notes";
+import { useCategories } from "@/hooks/use-categories";
 import { NoteListItem } from "@/components/notes/note-list-item";
 
 export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const { notes, createNote } = useNotes();
+  const { notes, createNote, moveToCategory } = useNotes();
+  const { categories } = useCategories();
   const router = useRouter();
 
   // Dates that have notes (for dot indicators)
@@ -22,7 +24,7 @@ export default function CalendarPage() {
     const seen = new Set<number>();
     const dates: Date[] = [];
     for (const note of notes) {
-      const dayKey = startOfDay(note.updatedAt).getTime();
+      const dayKey = startOfDay(note.createdAt).getTime();
       if (!seen.has(dayKey)) {
         seen.add(dayKey);
         dates.push(new Date(dayKey));
@@ -33,7 +35,7 @@ export default function CalendarPage() {
 
   // Notes for the selected date
   const selectedNotes = useMemo(() => {
-    return notes.filter((note) => isSameDay(note.updatedAt, selectedDate));
+    return notes.filter((note) => isSameDay(note.createdAt, selectedDate));
   }, [notes, selectedDate]);
 
   const handleCreate = async () => {
@@ -67,7 +69,7 @@ export default function CalendarPage() {
               modifiers={{ hasNotes: datesWithNotes }}
               modifiersClassNames={{
                 hasNotes:
-                  "relative after:absolute after:bottom-0.5 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-primary",
+                  "relative after:absolute after:bottom-0.5 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-primary after:z-20 after:pointer-events-none data-[selected=true]:after:bg-black dark:data-[selected=true]:after:bg-black",
               }}
             />
           </CardContent>
@@ -93,7 +95,12 @@ export default function CalendarPage() {
           ) : (
             <div className="grid gap-3">
               {selectedNotes.map((note) => (
-                <NoteListItem key={note.id} note={note} />
+                <NoteListItem
+                key={note.id}
+                note={note}
+                categories={categories}
+                onMoveToCategory={moveToCategory}
+              />
               ))}
             </div>
           )}
