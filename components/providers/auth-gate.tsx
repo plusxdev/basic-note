@@ -4,6 +4,7 @@ import { type ReactNode } from "react";
 import { useCrypto } from "./crypto-provider";
 import { LockScreen } from "@/components/lock-screen";
 import { Spinner } from "@minnjii/dx-kit/ui/spinner";
+import { Toaster } from "@minnjii/dx-kit/ui/sonner";
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const { isLoading, isSetup, isUnlocked } = useCrypto();
@@ -20,5 +21,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return <LockScreen />;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <Toaster />
+    </>
+  );
 }

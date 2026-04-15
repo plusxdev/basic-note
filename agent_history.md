@@ -1,6 +1,6 @@
-# 🕒 Project Checkpoint (2026-04-15)
+# 🕒 Project Checkpoint (2026-04-16)
 
-- **Current Milestone**: Phase 6 PWA 완료 + UI 대폭 개선 + 고정 정렬 수정
+- **Current Milestone**: Phase 7 설정 페이지 완료
 
 - **Key Achievements**:
   - Phase 1: 기반 구축 (패키지 설치, 타입/DB/상수 정의, Provider, 앱 셸+사이드바+라우팅)
@@ -12,18 +12,20 @@
   - 카테고리 이동: 노트 리스트 아이템에 폴더 아이콘 드롭다운, 노트 상세 드롭다운 서브메뉴
   - 노트 생성일: 상세 타이틀 우측에 날짜 표시, 클릭 시 캘린더 팝오버로 날짜 변경 가능
   - 캘린더 뷰: createdAt 기준 노트 그룹핑, 선택 날짜 검정 점 표시
-  - **Phase 6 (PWA)**: manifest.json, Service Worker(network-first navigation + cache-first static), 아이콘(192/512/apple-touch, "n" 글자), SW 등록 컴포넌트
-  - **앱 이름**: "basic note"로 통일 (metadata, manifest, 사이드바)
-  - **세션 유지**: sessionStorage 기반 — 새로고침해도 타임아웃 내 자동 잠금해제, 탭 닫으면 삭제
-  - **삭제 컨펌**: 카테고리/노트 삭제 시 AlertDialog 확인창 추가
-  - **사이드바 UI 정리**: 로고 아이콘 제거, 경계선 제거, 메뉴 버튼 배경 투명, 네비 아이콘 제거, 탐색 라벨 숨김, 카테고리 라벨→+ 버튼으로 대체
-  - **콘텐츠 UI 정리**: 모든 페이지 타이틀 아래 한글 설명 삭제, 노트 상세 좌측 정렬
-  - **카테고리 페이지**: 타이틀에 카테고리명 동적 표시
-  - **고정(Pin) 정렬 수정**: 고정 노트가 리스트 최상단에 항상 위치
-  - **crypto-provider 안전장치**: syncPullSettings catch + 5초 타임아웃 (모바일 로딩 무한 방지)
+  - Phase 6 (PWA): manifest.json, Service Worker(network-first navigation + cache-first static), 아이콘(192/512/apple-touch, "n" 글자), SW 등록 컴포넌트
+  - 앱 이름: "basic note"로 통일
+  - 세션 유지: sessionStorage 기반 — 새로고침해도 타임아웃 내 자동 잠금해제
+  - 삭제 컨펌: 카테고리/노트 삭제 시 AlertDialog 확인창
+  - 사이드바/콘텐츠 UI 정리
+  - 고정(Pin) 정렬 수정: 고정 노트가 리스트 최상단에 항상 위치
+  - **Phase 7 (설정 페이지)**:
+    - **보안 섹션**: 자동 잠금 타임아웃 Select (1분/5분/15분/30분/사용안함), DB+Supabase 동기화, 즉시 잠금 버튼
+    - **데이터 섹션**: 내보내기 (모든 노트/카테고리/블록 복호화 → JSON 다운로드), 가져오기 (JSON → 암호화 → DB 저장)
+    - **키보드 단축키 섹션**: 에디터 단축키 + 슬래시 명령 목록 (Kbd 컴포넌트 사용)
+    - **토스트 알림 (Sonner)**: AuthGate에 Toaster 배치, 노트 삭제/고정/카테고리 이동/카테고리 추가·삭제/설정 변경/내보내기·가져오기 완료 시 toast 알림
+    - **CryptoProvider 확장**: lockTimeoutMinutes + setLockTimeout 컨텍스트 노출
 
 - **Pending Tasks**:
-  - Phase 7: 설정 페이지 (잠금 타임아웃 UI, 내보내기/가져오기, 토스트 알림, 키보드 단축키)
   - 모바일 대응: 블록 에디터 + 버튼 (슬래시 명령 터치 대안)
   - 캘린더 점 표시: 선택 상태에서 z-index 이슈 잔존 가능
 
@@ -35,19 +37,19 @@
   - 드래그앤드롭: @dnd-kit + fractional-indexing
   - 배포: Vercel (서버리스), 수동 vercel --prod
   - 뷰 전환: 라우트 기반 (/notes, /notes/calendar, /notes/categories) + 헤더 탭 네비게이션
-  - 노트 날짜: createdAt을 사용자가 변경 가능 (updateNoteDate 훅)
-  - PWA: 수동 Service Worker (next-pwa 미사용), network-first navigation + cache-first static assets
-  - 세션 유지: sessionStorage에 비밀번호+타임스탬프 저장, 활동 시 갱신, 잠금/탭닫기 시 삭제
-  - DB 이름: "SecureNotes" 유지 (기존 데이터 호환)
+  - PWA: 수동 Service Worker (next-pwa 미사용)
+  - 세션 유지: sessionStorage 기반
+  - DB 이름: "SecureNotes" 유지
   - 앱 이름: "basic note"
-  - 모바일 HTTP 환경에서 crypto.subtle 미지원 — HTTPS(Vercel 배포)에서만 정상 동작
+  - Toaster: AuthGate(client component) 내부 배치 (root layout은 서버 컴포넌트라 useTheme 불가)
+  - 내보내기/가져오기: ExportData v1 포맷 (JSON, 복호화된 평문)
 
 - **Agent Notes**:
   - Supabase URL: https://yjguaevkaymidxvllioo.supabase.co
   - Supabase anon key: .env.local에 저장됨
   - Supabase 테이블: encrypted_entities (RLS + Realtime ON), app_settings (RLS ON)
   - Vercel 프로젝트: kihyun-5528s-projects/pro_03_note
-  - Vercel 도메인: https://pro03note.vercel.app (유일한 도메인)
+  - Vercel 도메인: https://pro03note.vercel.app
   - Vercel 환경변수: NPM_TOKEN, NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY (production)
   - GitHub 레포: plusxdev/pro-03-note (private)
   - git config: plusxdev / kihyun@plus-ex.com
@@ -57,18 +59,19 @@
 ## 파일 구조 요약
 ```
 app/
-  layout.tsx (PWA 메타태그+SW등록, basic note), page.tsx (→ /notes 리다이렉트)
-  notes/ (layout.tsx[뷰탭+pt-10] + page.tsx + [noteId]/page.tsx[좌측정렬+삭제컨펌+날짜+카테고리이동] + calendar/page.tsx + categories/page.tsx + categories/[categoryId]/page.tsx[카테고리명 동적타이틀])
-  settings/ (layout.tsx + page.tsx)
-  globals.css (사이드바 경계선/버튼배경 오버라이드)
+  layout.tsx (PWA 메타태그+SW등록, basic note)
+  page.tsx (→ /notes 리다이렉트)
+  notes/ (layout.tsx[뷰탭+pt-10] + page.tsx + [noteId]/page.tsx[삭제컨펌+날짜+카테고리이동+toast] + calendar/page.tsx + categories/page.tsx + categories/[categoryId]/page.tsx)
+  settings/ (layout.tsx + page.tsx[보안+데이터+단축키 섹션])
+  globals.css
 components/
-  providers/ (db-provider, crypto-provider[세션유지], auth-gate, sw-register)
-  sidebar/ (app-sidebar[아이콘제거,라벨숨김,+버튼], category-tree[삭제컨펌])
-  notes/ (note-list[description제거], note-list-item[카테고리이동드롭다운])
+  providers/ (db-provider, crypto-provider[세션유지+setLockTimeout], auth-gate[+Toaster], sw-register)
+  sidebar/ (app-sidebar[+toast], category-tree[+toast])
+  notes/ (note-list, note-list-item[+toast])
   editor/ (block-editor, block-renderer, block-types, note-title, slash-command-menu, blocks/*)
   dialogs/ (category-dialog)
   lock-screen.tsx
-hooks/ (use-notes[고정정렬수정+updateNoteDate], use-blocks, use-categories)
+hooks/ (use-notes, use-blocks, use-categories)
 lib/ (db, types, constants, crypto, fractional-index, supabase, sync/engine)
 public/
   manifest.json, sw.js

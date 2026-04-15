@@ -2,6 +2,7 @@
 
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { useCrypto } from "@/components/providers/crypto-provider";
@@ -72,6 +73,7 @@ export default function NoteEditorPage({
 
   const handleDelete = useCallback(async () => {
     await deleteNote(noteId);
+    toast.success("노트를 삭제했습니다");
     router.push("/notes");
   }, [noteId, deleteNote, router]);
 
@@ -100,7 +102,10 @@ export default function NoteEditorPage({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => togglePin(noteId)}>
+            <DropdownMenuItem onClick={() => {
+              togglePin(noteId);
+              toast.success(note.pinned ? "고정을 해제했습니다" : "노트를 고정했습니다");
+            }}>
               {note.pinned ? (
                 <>
                   <PinOff className="mr-2 h-4 w-4" />
@@ -122,7 +127,10 @@ export default function NoteEditorPage({
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent>
                     <DropdownMenuItem
-                      onClick={() => moveToCategory(noteId, null)}
+                      onClick={() => {
+                        moveToCategory(noteId, null);
+                        toast.success("미분류로 이동했습니다");
+                      }}
                       disabled={!note.categoryId}
                     >
                       <Inbox className="mr-2 h-4 w-4" />
@@ -134,7 +142,10 @@ export default function NoteEditorPage({
                     {categories.map((cat) => (
                       <DropdownMenuItem
                         key={cat.id}
-                        onClick={() => moveToCategory(noteId, cat.id)}
+                        onClick={() => {
+                          moveToCategory(noteId, cat.id);
+                          toast.success(`"${cat.name}"으로 이동했습니다`);
+                        }}
                         disabled={note.categoryId === cat.id}
                       >
                         <Folder className="mr-2 h-4 w-4" />

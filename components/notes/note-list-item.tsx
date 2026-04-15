@@ -21,6 +21,7 @@ import {
   DropdownMenuLabel,
 } from "@minnjii/dx-kit/ui/dropdown-menu";
 import { Pin, FolderInput, Folder, Inbox, Check } from "lucide-react";
+import { toast } from "sonner";
 import type { DecryptedNote } from "@/hooks/use-notes";
 import type { Category } from "@/lib/types";
 
@@ -82,7 +83,10 @@ export function NoteListItem({
                   <DropdownMenuLabel>카테고리 이동</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    onClick={() => onMoveToCategory(note.id, null)}
+                    onClick={() => {
+                      onMoveToCategory(note.id, null);
+                      toast.success("미분류로 이동했습니다");
+                    }}
                     disabled={!note.categoryId}
                   >
                     <Inbox className="mr-2 h-4 w-4" />
@@ -94,7 +98,10 @@ export function NoteListItem({
                   {categories.map((cat) => (
                     <DropdownMenuItem
                       key={cat.id}
-                      onClick={() => onMoveToCategory(note.id, cat.id)}
+                      onClick={() => {
+                        onMoveToCategory(note.id, cat.id);
+                        toast.success(`"${cat.name}"으로 이동했습니다`);
+                      }}
                       disabled={note.categoryId === cat.id}
                     >
                       <Folder className="mr-2 h-4 w-4" />

@@ -34,12 +34,16 @@ interface CryptoContextValue {
   isUnlocked: boolean;
   /** Loading state while checking setup */
   isLoading: boolean;
+  /** Current lock timeout in minutes */
+  lockTimeoutMinutes: number;
   /** Set up the master password for the first time */
   setup: (password: string) => Promise<void>;
   /** Unlock with password */
   unlock: (password: string) => Promise<boolean>;
   /** Lock immediately */
   lock: () => void;
+  /** Change the lock timeout */
+  setLockTimeout: (minutes: number) => Promise<void>;
   /** Encrypt a string */
   encryptText: (plaintext: string) => Promise<string>;
   /** Decrypt a string */
@@ -215,6 +219,17 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
     setCryptoKey(null);
   }, []);
 
+  const setLockTimeout = useCallback(
+    async (minutes: number) => {
+      await db.settings.update("settings", {
+        lockTimeoutMinutes: minutes,
+        updatedAt: Date.now(),
+      });
+      await syncPushSettings();
+    },
+    []
+  );
+
   const encryptText = useCallback(
     async (plaintext: string): Promise<string> => {
       if (!cryptoKey) throw new Error("App is locked");
@@ -237,9 +252,11 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
         isSetup,
         isUnlocked,
         isLoading,
+        lockTimeoutMinutes: settings?.lockTimeoutMinutes ?? DEFAULT_LOCK_TIMEOUT_MINUTES,
         setup,
         unlock,
         lock,
+        setLockTimeout,
         encryptText,
         decryptText,
       }}

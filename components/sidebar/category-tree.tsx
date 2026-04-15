@@ -29,6 +29,7 @@ import {
   AlertDialogAction,
 } from "@minnjii/dx-kit/ui/alert-dialog";
 import { Folder, ChevronRight, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { useCategories } from "@/hooks/use-categories";
 import type { CategoryTreeNode } from "@/lib/types";
 
@@ -66,7 +67,7 @@ function CategoryNode({ node, depth = 0 }: { node: CategoryTreeNode; depth?: num
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>취소</AlertDialogCancel>
-                <AlertDialogAction onClick={() => deleteCategory(node.id)}>
+                <AlertDialogAction onClick={() => { deleteCategory(node.id); toast.success("카테고리를 삭제했습니다"); }}>
                   삭제
                 </AlertDialogAction>
               </AlertDialogFooter>
@@ -132,7 +133,7 @@ function CategoryNode({ node, depth = 0 }: { node: CategoryTreeNode; depth?: num
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleteCategory(node.id)}>
+            <AlertDialogAction onClick={() => { deleteCategory(node.id); toast.success("카테고리를 삭제했습니다"); }}>
               삭제
             </AlertDialogAction>
           </AlertDialogFooter>

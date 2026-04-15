@@ -25,6 +25,7 @@ import {
   Lock,
   Plus,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useCrypto } from "@/components/providers/crypto-provider";
 import { useCategories } from "@/hooks/use-categories";
 import { CategoryTree } from "./category-tree";
@@ -124,6 +125,7 @@ export function AppSidebar() {
       onOpenChange={setCategoryDialogOpen}
       onSubmit={async (name) => {
         await createCategory(name);
+        toast.success("카테고리를 추가했습니다");
       }}
     />
     </>
