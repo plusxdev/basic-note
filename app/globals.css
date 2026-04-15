@@ -148,6 +148,29 @@
     background-color: transparent !important;
   }
 
+  /* Calendar: selected day box offset */
+  .calendar-days button[data-selected-single="true"],
+  .calendar-days button[data-selected-single="true"]:hover,
+  .calendar-days button[data-selected-single="true"]:focus,
+  .calendar-days button[data-selected-single="true"]:focus-visible {
+    background: transparent !important;
+    color: var(--primary-foreground) !important;
+    outline: none !important;
+    box-shadow: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    border-color: transparent !important;
+  }
+  .calendar-days button[data-selected-single="true"]::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 2px;
+    bottom: -6px;
+    border-radius: var(--radius-md);
+    z-index: -1;
+    background: var(--primary);
+  }
+
   /* Block editor placeholder */
   [contenteditable]:empty::before {
     content: attr(data-placeholder);

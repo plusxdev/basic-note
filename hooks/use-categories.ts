@@ -154,11 +154,49 @@ export function useCategories() {
     if (deleted) syncPushEntity("category", deleted);
   }, []);
 
+  const deleteCategoryWithNotes = useCallback(async (id: string) => {
+    const now = Date.now();
+    await db.transaction("rw", db.categories, db.notes, db.blocks, async () => {
+      await db.categories.update(id, { deletedAt: now, updatedAt: now });
+      const cat = await db.categories.get(id);
+      if (cat) {
+        await db.categories
+          .where("parentId")
+          .equals(id)
+          .modify({ parentId: cat.parentId, updatedAt: now });
+      }
+      const categoryNotes = await db.notes
+        .where("categoryId")
+        .equals(id)
+        .filter((n) => !n.deletedAt)
+        .toArray();
+      for (const note of categoryNotes) {
+        await db.notes.update(note.id, { deletedAt: now, updatedAt: now });
+        await db.blocks
+          .where("noteId")
+          .equals(note.id)
+          .modify({ deletedAt: now, updatedAt: now });
+      }
+    });
+    // Sync to remote
+    const deletedCat = await db.categories.get(id);
+    if (deletedCat) syncPushEntity("category", deletedCat);
+    const deletedNotes = await db.notes.where("categoryId").equals(id).toArray();
+    for (const note of deletedNotes) {
+      syncPushEntity("note", note);
+      const blocks = await db.blocks.where("noteId").equals(note.id).toArray();
+      for (const block of blocks) {
+        syncPushEntity("block", block);
+      }
+    }
+  }, []);
+
   return {
     categories: categories ?? [],
     tree,
     createCategory,
     updateCategory,
     deleteCategory,
+    deleteCategoryWithNotes,
   };
 }

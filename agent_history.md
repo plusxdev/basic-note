@@ -1,6 +1,6 @@
 # 🕒 Project Checkpoint (2026-04-16)
 
-- **Current Milestone**: Phase 7 설정 페이지 완료
+- **Current Milestone**: Phase 7 완료 + UX 개선 패치
 
 - **Key Achievements**:
   - Phase 1: 기반 구축 (패키지 설치, 타입/DB/상수 정의, Provider, 앱 셸+사이드바+라우팅)
@@ -24,10 +24,16 @@
     - **키보드 단축키 섹션**: 에디터 단축키 + 슬래시 명령 목록 (Kbd 컴포넌트 사용)
     - **토스트 알림 (Sonner)**: AuthGate에 Toaster 배치, 노트 삭제/고정/카테고리 이동/카테고리 추가·삭제/설정 변경/내보내기·가져오기 완료 시 toast 알림
     - **CryptoProvider 확장**: lockTimeoutMinutes + setLockTimeout 컨텍스트 노출
+  - **UX 개선 패치 (이번 세션)**:
+    - **카테고리 삭제 UX 변경**: 사이드바 호버 삭제 버튼 제거 → 카테고리 페이지 헤더에 삭제 버튼 이동, 2단계 컨펌 (1차: 삭제 확인, 2차: 카테고리+하위 노트 전부 삭제 경고)
+    - **deleteCategoryWithNotes**: 카테고리+노트+블록 모두 소프트 삭제 후 Supabase 동기화
+    - **fractional-index 방어**: before >= after 시 크래시 방지 (after 무시)
+    - **캘린더 뷰 미세 조정**: 노트 점 표시 3px 하향, 선택 박스 ::before pseudo로 아래 6px 확장 + 2px 하향, hover/focus 시 텍스트·링 간섭 제거 (globals.css .calendar-days 클래스)
 
 - **Pending Tasks**:
   - 모바일 대응: 블록 에디터 + 버튼 (슬래시 명령 터치 대안)
-  - 캘린더 점 표시: 선택 상태에서 z-index 이슈 잔존 가능
+  - 비밀번호 변경 기능 (현재 비밀번호 분실 시 복구 불가)
+  - 비밀번호 힌트 또는 초기화 기능
 
 - **Technical Decisions**:
   - 저장소: Dexie.js (IndexedDB) + Supabase (PostgreSQL, 도쿄 리전)
@@ -43,6 +49,8 @@
   - 앱 이름: "basic note"
   - Toaster: AuthGate(client component) 내부 배치 (root layout은 서버 컴포넌트라 useTheme 불가)
   - 내보내기/가져오기: ExportData v1 포맷 (JSON, 복호화된 평문)
+  - 카테고리 삭제: 2단계 컨펌 → deleteCategoryWithNotes (카테고리+노트+블록 소프트삭제)
+  - 캘린더 선택 박스: globals.css .calendar-days 클래스로 ::before pseudo 오프셋 관리
 
 - **Agent Notes**:
   - Supabase URL: https://yjguaevkaymidxvllioo.supabase.co
@@ -61,18 +69,18 @@
 app/
   layout.tsx (PWA 메타태그+SW등록, basic note)
   page.tsx (→ /notes 리다이렉트)
-  notes/ (layout.tsx[뷰탭+pt-10] + page.tsx + [noteId]/page.tsx[삭제컨펌+날짜+카테고리이동+toast] + calendar/page.tsx + categories/page.tsx + categories/[categoryId]/page.tsx)
+  notes/ (layout.tsx[뷰탭+pt-10] + page.tsx + [noteId]/page.tsx[삭제컨펌+날짜+카테고리이동+toast] + calendar/page.tsx[.calendar-days] + categories/page.tsx + categories/[categoryId]/page.tsx)
   settings/ (layout.tsx + page.tsx[보안+데이터+단축키 섹션])
-  globals.css
+  globals.css (.calendar-days 선택박스 스타일)
 components/
   providers/ (db-provider, crypto-provider[세션유지+setLockTimeout], auth-gate[+Toaster], sw-register)
-  sidebar/ (app-sidebar[+toast], category-tree[+toast])
-  notes/ (note-list, note-list-item[+toast])
+  sidebar/ (app-sidebar[+toast], category-tree[삭제버튼 제거됨])
+  notes/ (note-list[카테고리 삭제 2단계 컨펌], note-list-item[+toast])
   editor/ (block-editor, block-renderer, block-types, note-title, slash-command-menu, blocks/*)
   dialogs/ (category-dialog)
   lock-screen.tsx
-hooks/ (use-notes, use-blocks, use-categories)
-lib/ (db, types, constants, crypto, fractional-index, supabase, sync/engine)
+hooks/ (use-notes, use-blocks, use-categories[+deleteCategoryWithNotes])
+lib/ (db, types, constants, crypto, fractional-index[방어처리], supabase, sync/engine)
 public/
   manifest.json, sw.js
   icons/ (icon.svg[n], icon-192.png, icon-512.png, apple-touch-icon.png)

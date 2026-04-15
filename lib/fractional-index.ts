@@ -4,6 +4,9 @@ export function getOrderBetween(
   before: string | null,
   after: string | null
 ): string {
+  if (before !== null && after !== null && before >= after) {
+    return generateKeyBetween(before, null);
+  }
   return generateKeyBetween(before, after);
 }
 

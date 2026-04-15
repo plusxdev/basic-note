@@ -63,10 +63,11 @@ export default function CalendarPage() {
               selected={selectedDate}
               onSelect={(date) => date && setSelectedDate(date)}
               locale={ko}
+              className="calendar-days"
               modifiers={{ hasNotes: datesWithNotes }}
               modifiersClassNames={{
                 hasNotes:
-                  "relative after:absolute after:bottom-0.5 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-primary after:z-20 after:pointer-events-none data-[selected=true]:after:bg-black dark:data-[selected=true]:after:bg-black",
+                  "relative after:absolute after:bottom-[-1px] after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-primary after:z-20 after:pointer-events-none data-[selected=true]:after:bg-black dark:data-[selected=true]:after:bg-black",
               }}
             />
           </CardContent>
