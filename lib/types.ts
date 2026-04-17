@@ -58,6 +58,10 @@ export interface AppSettings {
   id: "settings";
   encryptionSalt: string; // base64
   encryptionVerifier: string; // encrypted known-plaintext
+  encryptedMasterKey?: string; // master key wrapped by password-derived key
+  recoverySalt?: string; // base64, salt for recovery key derivation
+  recoveryEncryptedMasterKey?: string; // master key wrapped by recovery-derived key
+  recoveryKeyEncrypted?: string; // recovery key encrypted with master key (for viewing)
   lockTimeoutMinutes: number;
   defaultView: ViewMode;
   createdAt: number;

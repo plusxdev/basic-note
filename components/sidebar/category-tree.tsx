@@ -17,11 +17,13 @@ import {
   CollapsibleContent,
 } from "@minnjii/dx-kit/ui/collapsible";
 import { Folder, ChevronRight } from "lucide-react";
+import { useLanguage } from "@/components/providers/language-provider";
 import { useCategories } from "@/hooks/use-categories";
 import type { CategoryTreeNode } from "@/lib/types";
 
 function CategoryNode({ node, depth = 0 }: { node: CategoryTreeNode; depth?: number }) {
   const pathname = usePathname();
+  const { t } = useLanguage();
   const isActive = pathname === `/notes/categories/${node.id}`;
   const hasChildren = node.children.length > 0;
 
@@ -35,16 +37,13 @@ function CategoryNode({ node, depth = 0 }: { node: CategoryTreeNode; depth?: num
               <span>{node.name}</span>
             </SidebarMenuButton>
           </CollapsibleTrigger>
-          {node.noteCount > 0 && (
-            <SidebarMenuBadge>{node.noteCount}</SidebarMenuBadge>
-          )}
           <CollapsibleContent>
             <SidebarMenuSub>
               {/* Link to this category's notes */}
               <SidebarMenuSubItem>
                 <SidebarMenuSubButton asChild isActive={isActive}>
                   <Link href={`/notes/categories/${node.id}`}>
-                    모든 노트
+                    {t("categories.allNotes")}
                   </Link>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
@@ -56,11 +55,6 @@ function CategoryNode({ node, depth = 0 }: { node: CategoryTreeNode; depth?: num
                   >
                     <Link href={`/notes/categories/${child.id}`}>
                       {child.name}
-                      {child.noteCount > 0 && (
-                        <span className="ml-auto text-xs text-muted-foreground">
-                          {child.noteCount}
-                        </span>
-                      )}
                     </Link>
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
@@ -80,23 +74,21 @@ function CategoryNode({ node, depth = 0 }: { node: CategoryTreeNode; depth?: num
           <span>{node.name}</span>
         </Link>
       </SidebarMenuButton>
-      {node.noteCount > 0 && (
-        <SidebarMenuBadge>{node.noteCount}</SidebarMenuBadge>
-      )}
     </SidebarMenuItem>
   );
 }
 
 export function CategoryTree() {
   const { tree } = useCategories();
+  const { t } = useLanguage();
 
   if (tree.length === 0) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>
-          <SidebarMenuButton disabled tooltip="카테고리 없음">
+          <SidebarMenuButton disabled tooltip={t("nav.noCategories")}>
             <Folder className="opacity-50" />
-            <span className="text-muted-foreground text-sm">카테고리 없음</span>
+            <span className="text-muted-foreground text-sm">{t("nav.noCategories")}</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>

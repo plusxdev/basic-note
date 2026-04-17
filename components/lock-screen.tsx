@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useCrypto } from "@/components/providers/crypto-provider";
+import { useLanguage } from "@/components/providers/language-provider";
 import { Button } from "@minnjii/dx-kit/ui/button";
 import { Input } from "@minnjii/dx-kit/ui/input";
 import { Label } from "@minnjii/dx-kit/ui/label";
@@ -13,23 +14,41 @@ import {
   CardContent,
   CardFooter,
 } from "@minnjii/dx-kit/ui/card";
-import { Lock, Eye, EyeOff } from "lucide-react";
+import { Lock, Eye, EyeOff, KeyRound } from "lucide-react";
+
+type Mode = "password" | "setup" | "recovery";
 
 export function LockScreen() {
-  const { isSetup, setup, unlock } = useCrypto();
+  const { isSetup, setup, unlock, recoverWithKey } = useCrypto();
+  const { t } = useLanguage();
+
+  const [mode, setMode] = useState<Mode>(isSetup ? "password" : "setup");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [recoveryKeyInput, setRecoveryKeyInput] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newConfirm, setNewConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const resetFields = () => {
+    setPassword("");
+    setConfirmPassword("");
+    setRecoveryKeyInput("");
+    setNewPassword("");
+    setNewConfirm("");
+    setError("");
+  };
+
+  // ── Setup ──────────────────────────────────────────────────
   const handleSetup = async () => {
     if (password.length < 4) {
-      setError("비밀번호는 4자 이상이어야 합니다");
+      setError(t("lock.errMinLength"));
       return;
     }
     if (password !== confirmPassword) {
-      setError("비밀번호가 일치하지 않습니다");
+      setError(t("lock.errMismatch"));
       return;
     }
     setLoading(true);
@@ -37,20 +56,48 @@ export function LockScreen() {
     try {
       await setup(password);
     } catch {
-      setError("설정 중 오류가 발생했습니다");
+      setError(t("lock.errSetup"));
     } finally {
       setLoading(false);
     }
   };
 
+  // ── Unlock ─────────────────────────────────────────────────
   const handleUnlock = async () => {
     setLoading(true);
     setError("");
     try {
       const ok = await unlock(password);
-      if (!ok) setError("비밀번호가 틀렸습니다");
+      if (!ok) setError(t("lock.errWrong"));
     } catch {
-      setError("잠금 해제 중 오류가 발생했습니다");
+      setError(t("lock.errUnlock"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Recovery ───────────────────────────────────────────────
+  const handleRecover = async () => {
+    const trimmed = recoveryKeyInput.trim();
+    if (!trimmed) {
+      setError(t("lock.errRecoveryEmpty"));
+      return;
+    }
+    if (newPassword.length < 4) {
+      setError(t("lock.errNewMinLength"));
+      return;
+    }
+    if (newPassword !== newConfirm) {
+      setError(t("lock.errNewMismatch"));
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const ok = await recoverWithKey(trimmed, newPassword);
+      if (!ok) setError(t("lock.errRecoveryInvalid"));
+    } catch {
+      setError(t("lock.errRecovery"));
     } finally {
       setLoading(false);
     }
@@ -58,11 +105,9 @@ export function LockScreen() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSetup) {
-      handleUnlock();
-    } else {
-      handleSetup();
-    }
+    if (mode === "setup") handleSetup();
+    else if (mode === "password") handleUnlock();
+    else handleRecover();
   };
 
   return (
@@ -71,74 +116,151 @@ export function LockScreen() {
         <form onSubmit={handleSubmit}>
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-              <Lock className="h-7 w-7 text-primary" />
+              {mode === "recovery" ? (
+                <KeyRound className="h-7 w-7 text-primary" />
+              ) : (
+                <Lock className="h-7 w-7 text-primary" />
+              )}
             </div>
             <CardTitle className="text-xl tracking-tight">
-              {isSetup ? "잠금 해제" : "비밀번호 설정"}
+              {mode === "setup"
+                ? t("lock.setupTitle")
+                : mode === "password"
+                  ? t("lock.unlockTitle")
+                  : t("lock.recoveryTitle")}
             </CardTitle>
             <CardDescription>
-              {isSetup
-                ? "비밀번호를 입력하세요"
-                : "노트를 보호할 비밀번호를 설정하세요"}
+              {mode === "setup"
+                ? t("lock.setupDesc")
+                : mode === "password"
+                  ? t("lock.unlockDesc")
+                  : t("lock.recoveryDesc")}
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="password">비밀번호</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  autoFocus
-                  autoComplete="off"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  className="absolute right-1 top-1/2 -translate-y-1/2"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-            </div>
+          <CardContent className="grid gap-4 pt-[30px]">
+            {mode === "recovery" ? (
+              <>
+                <div className="grid gap-2">
+                  <Input
+                    id="recovery-key"
+                    type="text"
+                    value={recoveryKeyInput}
+                    onChange={(e) => setRecoveryKeyInput(e.target.value)}
+                    placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+                    autoFocus
+                    autoComplete="off"
+                    className="font-mono text-sm"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Input
+                    id="new-pw"
+                    type={showPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Input
+                    id="new-confirm"
+                    type={showPassword ? "text" : "password"}
+                    value={newConfirm}
+                    onChange={(e) => setNewConfirm(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="off"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid gap-2">
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      autoFocus
+                      autoComplete="off"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      className="absolute right-1 top-1/2 -translate-y-1/2"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
 
-            {!isSetup && (
-              <div className="grid gap-2">
-                <Label htmlFor="confirm">비밀번호 확인</Label>
-                <Input
-                  id="confirm"
-                  type={showPassword ? "text" : "password"}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="off"
-                />
-              </div>
+                {mode === "setup" && (
+                  <div className="grid gap-2">
+                    <Input
+                      id="confirm"
+                      type={showPassword ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      autoComplete="off"
+                    />
+                  </div>
+                )}
+              </>
             )}
 
-            {error && (
-              <p className="text-sm text-destructive">{error}</p>
-            )}
+            {error && <p className="text-sm text-destructive">{error}</p>}
           </CardContent>
 
-          <CardFooter>
+          <CardFooter className="flex-col gap-3">
             <Button type="submit" className="w-full" disabled={loading}>
               {loading
-                ? "처리 중..."
-                : isSetup
-                  ? "잠금 해제"
-                  : "설정 완료"}
+                ? t("lock.processing")
+                : mode === "setup"
+                  ? t("lock.setupButton")
+                  : mode === "password"
+                    ? t("lock.unlockButton")
+                    : t("lock.recoveryButton")}
             </Button>
+
+            {isSetup && mode === "password" && (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => {
+                  resetFields();
+                  setMode("recovery");
+                }}
+              >
+                {t("lock.forgotPassword")}
+              </Button>
+            )}
+
+            {mode === "recovery" && (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => {
+                  resetFields();
+                  setMode("password");
+                }}
+              >
+                {t("lock.backToPassword")}
+              </Button>
+            )}
           </CardFooter>
         </form>
       </Card>

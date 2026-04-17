@@ -4,6 +4,7 @@ import "./globals.css";
 import { DbProvider } from "@/components/providers/db-provider";
 import { CryptoProvider } from "@/components/providers/crypto-provider";
 import { AuthGate } from "@/components/providers/auth-gate";
+import { LanguageProvider } from "@/components/providers/language-provider";
 import { SwRegister } from "@/components/providers/sw-register";
 
 const geistSans = Geist({
@@ -51,9 +52,11 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <SwRegister />
         <DbProvider>
-          <CryptoProvider>
-            <AuthGate>{children}</AuthGate>
-          </CryptoProvider>
+          <LanguageProvider>
+            <CryptoProvider>
+              <AuthGate>{children}</AuthGate>
+            </CryptoProvider>
+          </LanguageProvider>
         </DbProvider>
       </body>
     </html>

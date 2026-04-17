@@ -13,10 +13,19 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@minnjii/dx-kit/ui/alert-dialog";
-import { Plus, FileText, Trash2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@minnjii/dx-kit/ui/dropdown-menu";
+import { Plus, FileText, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useNotes } from "@/hooks/use-notes";
 import { useCategories } from "@/hooks/use-categories";
+import { useLanguage } from "@/components/providers/language-provider";
+import { CategoryDialog } from "@/components/dialogs/category-dialog";
 import { NoteListItem } from "./note-list-item";
 
 interface NoteListProps {
@@ -26,13 +35,16 @@ interface NoteListProps {
 
 export function NoteList({
   categoryId,
-  title = "모든 노트",
+  title,
 }: NoteListProps) {
+  const { t } = useLanguage();
+  const displayTitle = title ?? t("nav.allNotes");
   const { notes, createNote, moveToCategory } = useNotes(categoryId);
-  const { categories, deleteCategoryWithNotes } = useCategories();
+  const { categories, updateCategory, deleteCategoryWithNotes } = useCategories();
   const router = useRouter();
   const [showFirstConfirm, setShowFirstConfirm] = useState(false);
   const [showSecondConfirm, setShowSecondConfirm] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const handleCreate = async () => {
     const noteId = await createNote(categoryId ?? null);
@@ -47,7 +59,7 @@ export function NoteList({
   const handleDeleteCategory = async () => {
     if (!categoryId) return;
     await deleteCategoryWithNotes(categoryId);
-    toast.success("카테고리와 노트가 삭제되었습니다");
+    toast.success(t("notes.deletedCategory"));
     setShowSecondConfirm(false);
     router.push("/notes");
   };
@@ -56,55 +68,85 @@ export function NoteList({
     <div className="grid gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{displayTitle} <span className="text-[22px]">({notes.length})</span></h1>
         </div>
         <div className="flex items-center gap-2">
           {categoryId && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowFirstConfirm(true)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                  <Pencil className="h-4 w-4" />
+                  {t("common.edit")}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => setShowFirstConfirm(true)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {t("common.delete")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           <Button onClick={handleCreate}>
-            <Plus className="mr-2 h-4 w-4" />
-            새 노트
+            <Plus className="h-4 w-4" />
+            {t("notes.note")}
           </Button>
         </div>
       </div>
 
+      {/* Edit Category Dialog */}
+      {categoryId && (
+        <CategoryDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          onSubmit={async (name) => {
+            await updateCategory(categoryId, { name });
+            toast.success(t("categoryDialog.updated"));
+          }}
+          defaultName={displayTitle}
+          title={t("categoryDialog.editTitle")}
+          description={t("categoryDialog.editDesc")}
+        />
+      )}
+
+      {/* Delete: Step 1 */}
       <AlertDialog open={showFirstConfirm} onOpenChange={setShowFirstConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>카테고리 삭제</AlertDialogTitle>
+            <AlertDialogTitle>{t("notes.deleteCategory")}</AlertDialogTitle>
             <AlertDialogDescription>
-              &quot;{title}&quot; 카테고리를 삭제하시겠습니까?
+              &quot;{displayTitle}&quot; {t("notes.deleteCategoryConfirm")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={handleFirstConfirm}>
-              삭제
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Delete: Step 2 */}
       <AlertDialog open={showSecondConfirm} onOpenChange={setShowSecondConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>정말 삭제하시겠습니까?</AlertDialogTitle>
+            <AlertDialogTitle>{t("notes.deleteCategoryFinal")}</AlertDialogTitle>
             <AlertDialogDescription>
-              해당 카테고리와 하위 모든 노트({notes.length}개)가 삭제됩니다.
-              이 작업은 되돌릴 수 없습니다.
+              {t("notes.deleteCategoryWarn")} ({notes.length})
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteCategory}>
-              삭제
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -115,7 +157,7 @@ export function NoteList({
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted mb-4">
             <FileText className="h-8 w-8 text-muted-foreground" />
           </div>
-          <h3 className="text-lg font-medium">노트가 없습니다</h3>
+          <h3 className="text-lg font-medium">{t("notes.empty")}</h3>
         </div>
       ) : (
         <div className="grid gap-3">

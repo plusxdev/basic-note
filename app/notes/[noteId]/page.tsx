@@ -12,7 +12,7 @@ import { NoteTitle } from "@/components/editor/note-title";
 import { Button } from "@minnjii/dx-kit/ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "@minnjii/dx-kit/ui/popover";
 import { Calendar } from "@minnjii/dx-kit/ui/calendar";
-import { ko } from "date-fns/locale";
+import { ko, enUS } from "date-fns/locale";
 import { format } from "date-fns";
 import {
   DropdownMenu,
@@ -36,6 +36,7 @@ import {
   AlertDialogAction,
 } from "@minnjii/dx-kit/ui/alert-dialog";
 import { useCategories } from "@/hooks/use-categories";
+import { useLanguage } from "@/components/providers/language-provider";
 import { ArrowLeft, MoreHorizontal, Trash2, Pin, PinOff, FolderInput, Folder, Inbox, Check, CalendarIcon } from "lucide-react";
 
 export default function NoteEditorPage({
@@ -48,6 +49,7 @@ export default function NoteEditorPage({
   const { decryptText } = useCrypto();
   const { updateNoteTitle, updateNoteDate, deleteNote, togglePin, moveToCategory } = useNotes();
   const { categories } = useCategories();
+  const { t, language } = useLanguage();
 
   const [title, setTitle] = useState("");
   const titleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -57,8 +59,8 @@ export default function NoteEditorPage({
   // Decrypt title
   useEffect(() => {
     if (!note) return;
-    decryptText(note.title).then(setTitle).catch(() => setTitle("(복호화 실패)"));
-  }, [note, decryptText]);
+    decryptText(note.title).then(setTitle).catch(() => setTitle(t("lock.decryptFail")));
+  }, [note, decryptText, t]);
 
   const handleTitleChange = useCallback(
     (newTitle: string) => {
@@ -73,13 +75,13 @@ export default function NoteEditorPage({
 
   const handleDelete = useCallback(async () => {
     await deleteNote(noteId);
-    toast.success("노트를 삭제했습니다");
+    toast.success(t("editor.deleted"));
     router.push("/notes");
-  }, [noteId, deleteNote, router]);
+  }, [noteId, deleteNote, router, t]);
 
   if (!note) {
     return (
-      <div className="text-muted-foreground text-sm py-8">로딩 중...</div>
+      <div className="text-muted-foreground text-sm py-8">{t("lock.loading")}</div>
     );
   }
 
@@ -90,10 +92,11 @@ export default function NoteEditorPage({
         <Button
           variant="ghost"
           size="sm"
+          className="-ml-[15px] gap-0.5"
           onClick={() => router.push("/notes")}
         >
-          <ArrowLeft className="mr-1.5 h-4 w-4" />
-          뒤로
+          <ArrowLeft className="h-4 w-4" />
+          {t("editor.back")}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -104,17 +107,17 @@ export default function NoteEditorPage({
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => {
               togglePin(noteId);
-              toast.success(note.pinned ? "고정을 해제했습니다" : "노트를 고정했습니다");
+              toast.success(note.pinned ? t("editor.unpinned") : t("editor.pinned"));
             }}>
               {note.pinned ? (
                 <>
-                  <PinOff className="mr-2 h-4 w-4" />
-                  고정 해제
+                  <PinOff className="h-4 w-4" />
+                  {t("editor.unpin")}
                 </>
               ) : (
                 <>
-                  <Pin className="mr-2 h-4 w-4" />
-                  고정
+                  <Pin className="h-4 w-4" />
+                  {t("editor.pin")}
                 </>
               )}
             </DropdownMenuItem>
@@ -122,19 +125,19 @@ export default function NoteEditorPage({
               <>
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>
-                    <FolderInput className="mr-2 h-4 w-4" />
-                    카테고리
+                    <FolderInput className="h-4 w-4" />
+                    {t("editor.category")}
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent>
                     <DropdownMenuItem
                       onClick={() => {
                         moveToCategory(noteId, null);
-                        toast.success("미분류로 이동했습니다");
+                        toast.success(t("editor.movedUncategorized"));
                       }}
                       disabled={!note.categoryId}
                     >
-                      <Inbox className="mr-2 h-4 w-4" />
-                      미분류
+                      <Inbox className="h-4 w-4" />
+                      {t("editor.uncategorized")}
                       {!note.categoryId && (
                         <Check className="ml-auto h-3.5 w-3.5" />
                       )}
@@ -144,11 +147,11 @@ export default function NoteEditorPage({
                         key={cat.id}
                         onClick={() => {
                           moveToCategory(noteId, cat.id);
-                          toast.success(`"${cat.name}"으로 이동했습니다`);
+                          toast.success(`"${cat.name}" ${t("editor.movedTo")}`);
                         }}
                         disabled={note.categoryId === cat.id}
                       >
-                        <Folder className="mr-2 h-4 w-4" />
+                        <Folder className="h-4 w-4" />
                         {cat.name}
                         {note.categoryId === cat.id && (
                           <Check className="ml-auto h-3.5 w-3.5" />
@@ -166,21 +169,21 @@ export default function NoteEditorPage({
                   onSelect={(e) => e.preventDefault()}
                   className="text-destructive focus:text-destructive"
                 >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  삭제
+                  <Trash2 className="h-4 w-4" />
+                  {t("editor.delete")}
                 </DropdownMenuItem>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>노트 삭제</AlertDialogTitle>
+                  <AlertDialogTitle>{t("editor.deleteTitle")}</AlertDialogTitle>
                   <AlertDialogDescription>
-                    이 노트를 삭제하시겠습니까?
+                    {t("editor.deleteConfirm")}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>취소</AlertDialogCancel>
+                  <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
                   <AlertDialogAction onClick={handleDelete}>
-                    삭제
+                    {t("common.delete")}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -189,29 +192,22 @@ export default function NoteEditorPage({
         </DropdownMenu>
       </div>
 
-      {/* Title + Date */}
-      <div className="flex items-start gap-4">
-        <div className="flex-1 min-w-0">
-          <NoteTitle
-            title={title}
-            onTitleChange={handleTitleChange}
-            onEnter={() => {
-              const all = document.querySelectorAll<HTMLElement>(
-                "[contenteditable]"
-              );
-              if (all.length > 1) all[1].focus();
-            }}
-          />
-        </div>
+      {/* Category + Date */}
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-muted-foreground">
+          {categories.find((c) => c.id === note.categoryId)?.name ?? t("editor.uncategorized")}
+        </span>
         <Popover>
           <PopoverTrigger asChild>
             <Button
               variant="ghost"
               size="sm"
-              className="shrink-0 text-muted-foreground mt-1.5"
+              className="shrink-0 text-muted-foreground"
             >
               <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
-              {format(note.createdAt, "M월 d일", { locale: ko })}
+              {language === "ko"
+                ? format(note.createdAt, "M월 d일", { locale: ko })
+                : format(note.createdAt, "MMM d", { locale: enUS })}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="end">
@@ -221,10 +217,24 @@ export default function NoteEditorPage({
               onSelect={(date) => {
                 if (date) updateNoteDate(noteId, date.getTime());
               }}
-              locale={ko}
+              locale={language === "ko" ? ko : enUS}
             />
           </PopoverContent>
         </Popover>
+      </div>
+
+      {/* Title */}
+      <div className="-mt-3">
+        <NoteTitle
+          title={title}
+          onTitleChange={handleTitleChange}
+          onEnter={() => {
+            const all = document.querySelectorAll<HTMLElement>(
+              "[contenteditable]"
+            );
+            if (all.length > 1) all[1].focus();
+          }}
+        />
       </div>
 
       {/* Block Editor */}

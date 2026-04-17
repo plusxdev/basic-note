@@ -136,6 +136,11 @@
     @apply font-sans;
   }
 
+  /* Sidebar: custom width */
+  [data-slot="sidebar-wrapper"] {
+    --sidebar-width: 14rem;
+  }
+
   /* Sidebar: remove right border */
   [data-slot="sidebar-container"][data-side="left"] {
     border-right: none !important;
@@ -169,6 +174,39 @@
     border-radius: var(--radius-md);
     z-index: -1;
     background: var(--primary);
+  }
+
+  /* AccordionBlock: hide default bullet dot */
+  [data-slot="accordion-block-trigger"] > span:first-child:not(.flex-1) {
+    display: none !important;
+  }
+  /* AccordionBlock: highlight folder icon when open */
+  [data-slot="accordion-block-trigger"] .category-folder {
+    color: var(--muted-foreground);
+    transition: color 0.2s;
+  }
+  [data-slot="accordion-block-trigger"][data-state="open"] .category-folder {
+    color: #50e3c2;
+  }
+  /* AccordionBlock: uncategorized icon highlight */
+  [data-slot="accordion-block-trigger"] .uncategorized-icon {
+    color: var(--muted-foreground);
+    transition: color 0.2s;
+  }
+  [data-slot="accordion-block-trigger"][data-state="open"] .uncategorized-icon {
+    color: #50e3c2;
+  }
+
+  /* Sidebar: icons always present but invisible when expanded */
+  .nav-icon,
+  .logo-icon {
+    display: none !important;
+  }
+  [data-collapsible="icon"] .nav-icon {
+    display: block !important;
+  }
+  [data-collapsible="icon"] .logo-icon {
+    display: inline-block !important;
   }
 
   /* Block editor placeholder */

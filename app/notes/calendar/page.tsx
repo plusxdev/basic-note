@@ -7,17 +7,19 @@ import { Card, CardContent } from "@minnjii/dx-kit/ui/card";
 import { Button } from "@minnjii/dx-kit/ui/button";
 import { Badge } from "@minnjii/dx-kit/ui/badge";
 import { Plus, FileText } from "lucide-react";
-import { ko } from "date-fns/locale";
+import { ko, enUS } from "date-fns/locale";
 import { format, startOfDay, isSameDay } from "date-fns";
 import { useNotes } from "@/hooks/use-notes";
 import { useCategories } from "@/hooks/use-categories";
 import { NoteListItem } from "@/components/notes/note-list-item";
+import { useLanguage } from "@/components/providers/language-provider";
 
 export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const { notes, createNote, moveToCategory } = useNotes();
   const { categories } = useCategories();
   const router = useRouter();
+  const { t, language } = useLanguage();
 
   // Dates that have notes (for dot indicators)
   const datesWithNotes = useMemo(() => {
@@ -47,11 +49,11 @@ export default function CalendarPage() {
     <div className="grid gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">캘린더</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("calendar.title")}</h1>
         </div>
         <Button onClick={handleCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          새 노트
+          <Plus className="h-4 w-4" />
+          {t("notes.note")}
         </Button>
       </div>
 
@@ -62,7 +64,7 @@ export default function CalendarPage() {
               mode="single"
               selected={selectedDate}
               onSelect={(date) => date && setSelectedDate(date)}
-              locale={ko}
+              locale={language === "ko" ? ko : enUS}
               className="calendar-days"
               modifiers={{ hasNotes: datesWithNotes }}
               modifiersClassNames={{
@@ -76,9 +78,10 @@ export default function CalendarPage() {
         <div className="grid gap-4 content-start">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-medium">
-              {format(selectedDate, "M월 d일 (EEEE)", { locale: ko })}
+              {language === "ko"
+                ? format(selectedDate, "M월 d일 (EEE)", { locale: ko })
+                : format(selectedDate, "EEEE, MMMM d", { locale: enUS })}
             </h2>
-            <Badge variant="secondary">{selectedNotes.length}개</Badge>
           </div>
 
           {selectedNotes.length === 0 ? (
@@ -87,7 +90,7 @@ export default function CalendarPage() {
                 <FileText className="h-6 w-6 text-muted-foreground" />
               </div>
               <p className="text-sm text-muted-foreground">
-                이 날짜에 수정된 노트가 없습니다
+                {t("calendar.emptyDate")}
               </p>
             </div>
           ) : (

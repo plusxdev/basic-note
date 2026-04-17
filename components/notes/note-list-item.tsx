@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { ko } from "date-fns/locale";
+import { enUS } from "date-fns/locale";
 import {
   Card,
   CardHeader,
@@ -22,6 +23,7 @@ import {
 } from "@minnjii/dx-kit/ui/dropdown-menu";
 import { Pin, FolderInput, Folder, Inbox, Check } from "lucide-react";
 import { toast } from "sonner";
+import { useLanguage } from "@/components/providers/language-provider";
 import type { DecryptedNote } from "@/hooks/use-notes";
 import type { Category } from "@/lib/types";
 
@@ -37,9 +39,11 @@ export function NoteListItem({
   onMoveToCategory,
 }: NoteListItemProps) {
   const router = useRouter();
+  const { t, language } = useLanguage();
+  const dateLocale = language === "ko" ? ko : enUS;
   const timeAgo = formatDistanceToNow(note.updatedAt, {
     addSuffix: true,
-    locale: ko,
+    locale: dateLocale,
   });
 
   return (
@@ -53,11 +57,11 @@ export function NoteListItem({
             <Pin className="h-3.5 w-3.5 text-primary shrink-0" />
           )}
           <CardTitle className="text-base truncate">
-            {note.decryptedTitle || "제목 없음"}
+            {note.decryptedTitle || t("notes.untitled")}
           </CardTitle>
         </div>
         <CardDescription className="line-clamp-1">
-          {note.preview || "내용 없음"}
+          {note.preview || t("notes.noContent")}
         </CardDescription>
         <CardAction>
           <div className="flex items-center gap-1.5">
@@ -80,17 +84,17 @@ export function NoteListItem({
                   align="end"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <DropdownMenuLabel>카테고리 이동</DropdownMenuLabel>
+                  <DropdownMenuLabel>{t("editor.categoryMove")}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={() => {
                       onMoveToCategory(note.id, null);
-                      toast.success("미분류로 이동했습니다");
+                      toast.success(t("editor.movedUncategorized"));
                     }}
                     disabled={!note.categoryId}
                   >
-                    <Inbox className="mr-2 h-4 w-4" />
-                    미분류
+                    <Inbox className="h-4 w-4" />
+                    {t("editor.uncategorized")}
                     {!note.categoryId && (
                       <Check className="ml-auto h-3.5 w-3.5" />
                     )}
@@ -100,11 +104,11 @@ export function NoteListItem({
                       key={cat.id}
                       onClick={() => {
                         onMoveToCategory(note.id, cat.id);
-                        toast.success(`"${cat.name}"으로 이동했습니다`);
+                        toast.success(`"${cat.name}" ${t("editor.movedTo")}`);
                       }}
                       disabled={note.categoryId === cat.id}
                     >
-                      <Folder className="mr-2 h-4 w-4" />
+                      <Folder className="h-4 w-4" />
                       {cat.name}
                       {note.categoryId === cat.id && (
                         <Check className="ml-auto h-3.5 w-3.5" />

@@ -8,9 +8,16 @@ import {
   Lock,
   Keyboard,
   Shield,
+  KeyRound,
+  Copy,
+  Check,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@minnjii/dx-kit/ui/card";
 import { Button } from "@minnjii/dx-kit/ui/button";
+import { Input } from "@minnjii/dx-kit/ui/input";
+import { Label } from "@minnjii/dx-kit/ui/label";
 import {
   Select,
   SelectContent,
@@ -21,39 +28,10 @@ import {
 import { Separator } from "@minnjii/dx-kit/ui/separator";
 import { Kbd } from "@minnjii/dx-kit/ui/kbd";
 import { useCrypto } from "@/components/providers/crypto-provider";
+import { useLanguage } from "@/components/providers/language-provider";
+import type { Language } from "@/lib/i18n";
 import { db } from "@/lib/db";
 import type { Category, Note, Block } from "@/lib/types";
-
-// ─── Lock Timeout Options ────────────────────────────────────
-const TIMEOUT_OPTIONS = [
-  { value: "1", label: "1분" },
-  { value: "5", label: "5분" },
-  { value: "15", label: "15분" },
-  { value: "30", label: "30분" },
-  { value: "0", label: "사용 안 함" },
-];
-
-// ─── Keyboard Shortcuts ──────────────────────────────────────
-const SHORTCUTS = [
-  { keys: ["Enter"], desc: "새 블록 추가" },
-  { keys: ["Backspace"], desc: "빈 블록 삭제" },
-  { keys: ["Tab"], desc: "들여쓰기" },
-  { keys: ["Shift", "Tab"], desc: "내어쓰기" },
-  { keys: ["↑"], desc: "이전 블록으로 이동" },
-  { keys: ["↓"], desc: "다음 블록으로 이동" },
-  { keys: ["/"], desc: "슬래시 명령 메뉴" },
-];
-
-const SLASH_COMMANDS = [
-  { command: "/p", desc: "텍스트" },
-  { command: "/h", desc: "제목" },
-  { command: "/b", desc: "불릿 리스트" },
-  { command: "/n", desc: "번호 리스트" },
-  { command: "/t", desc: "할 일" },
-  { command: "/d", desc: "구분선" },
-  { command: "/q", desc: "인용" },
-  { command: "/c", desc: "코드" },
-];
 
 // ─── Export / Import Types ───────────────────────────────────
 interface ExportData {
@@ -71,11 +49,58 @@ export default function SettingsPage() {
     encryptText,
     decryptText,
     lock,
+    changePassword,
+    getRecoveryKey,
   } = useCrypto();
+
+  const { t, language, setLanguage } = useLanguage();
+
+  // ─── Lock Timeout Options ────────────────────────────────────
+  const TIMEOUT_OPTIONS = [
+    { value: "1", label: t("timeout.1") },
+    { value: "5", label: t("timeout.5") },
+    { value: "15", label: t("timeout.15") },
+    { value: "30", label: t("timeout.30") },
+    { value: "0", label: t("timeout.0") },
+  ];
+
+  // ─── Keyboard Shortcuts ──────────────────────────────────────
+  const SHORTCUTS = [
+    { keys: ["Enter"], desc: t("shortcut.newBlock") },
+    { keys: ["Backspace"], desc: t("shortcut.deleteBlock") },
+    { keys: ["Tab"], desc: t("shortcut.indent") },
+    { keys: ["Shift", "Tab"], desc: t("shortcut.outdent") },
+    { keys: ["\u2191"], desc: t("shortcut.prevBlock") },
+    { keys: ["\u2193"], desc: t("shortcut.nextBlock") },
+    { keys: ["/"], desc: t("shortcut.slashMenu") },
+  ];
+
+  const SLASH_COMMANDS = [
+    { command: "/p", desc: t("block.text") },
+    { command: "/h", desc: t("block.heading") },
+    { command: "/b", desc: t("block.bullet") },
+    { command: "/n", desc: t("block.numbered") },
+    { command: "/t", desc: t("block.todo") },
+    { command: "/d", desc: t("block.divider") },
+    { command: "/q", desc: t("block.quote") },
+    { command: "/c", desc: t("block.code") },
+  ];
 
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Password Change State ──────────────────────────────────
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [changingPw, setChangingPw] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+
+  // ── Recovery Key State ─────────────────────────────────────
+  const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryCopied, setRecoveryCopied] = useState(false);
 
   // ── Lock Timeout ─────────────────────────────────────────
   const handleTimeoutChange = useCallback(
@@ -84,12 +109,73 @@ export default function SettingsPage() {
       await setLockTimeout(minutes);
       toast.success(
         minutes === 0
-          ? "자동 잠금을 사용하지 않습니다"
-          : `${minutes}분 후 자동 잠금됩니다`
+          ? t("timeout.off")
+          : `${minutes}${t("timeout.set")}`
       );
     },
-    [setLockTimeout]
+    [setLockTimeout, t]
   );
+
+  // ── Password Change ────────────────────────────────────────
+  const handleChangePassword = useCallback(async () => {
+    if (!currentPw) {
+      toast.error(t("settings.currentPassword"));
+      return;
+    }
+    if (newPw.length < 4) {
+      toast.error(t("lock.errNewMinLength"));
+      return;
+    }
+    if (newPw !== confirmPw) {
+      toast.error(t("lock.errNewMismatch"));
+      return;
+    }
+    setChangingPw(true);
+    try {
+      const ok = await changePassword(currentPw, newPw);
+      if (ok) {
+        toast.success(t("settings.passwordChanged"));
+        setCurrentPw("");
+        setNewPw("");
+        setConfirmPw("");
+      } else {
+        toast.error(t("settings.passwordWrong"));
+      }
+    } catch {
+      toast.error(t("settings.passwordError"));
+    } finally {
+      setChangingPw(false);
+    }
+  }, [currentPw, newPw, confirmPw, changePassword, t]);
+
+  // ── Recovery Key ───────────────────────────────────────────
+  const handleShowRecoveryKey = useCallback(async () => {
+    if (recoveryKey) {
+      setRecoveryKey(null);
+      return;
+    }
+    setRecoveryLoading(true);
+    try {
+      const key = await getRecoveryKey();
+      if (key) {
+        setRecoveryKey(key);
+      } else {
+        toast.error(t("settings.recoveryError"));
+      }
+    } catch {
+      toast.error(t("settings.recoveryError"));
+    } finally {
+      setRecoveryLoading(false);
+    }
+  }, [recoveryKey, getRecoveryKey, t]);
+
+  const handleCopyRecoveryKey = useCallback(async () => {
+    if (!recoveryKey) return;
+    await navigator.clipboard.writeText(recoveryKey);
+    setRecoveryCopied(true);
+    toast.success(t("settings.recoveryCopied"));
+    setTimeout(() => setRecoveryCopied(false), 2000);
+  }, [recoveryKey, t]);
 
   // ── Export ───────────────────────────────────────────────
   const handleExport = useCallback(async () => {
@@ -140,21 +226,20 @@ export default function SettingsPage() {
       a.click();
       URL.revokeObjectURL(url);
 
-      toast.success("데이터를 내보냈습니다");
+      toast.success(t("settings.exported"));
     } catch (e) {
       console.error("[export]", e);
-      toast.error("내보내기에 실패했습니다");
+      toast.error(t("settings.exportError"));
     } finally {
       setExporting(false);
     }
-  }, [decryptText]);
+  }, [decryptText, t]);
 
   // ── Import ──────────────────────────────────────────────
   const handleImport = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      // Reset input so same file can be selected again
       e.target.value = "";
 
       setImporting(true);
@@ -163,13 +248,12 @@ export default function SettingsPage() {
         const data: ExportData = JSON.parse(text);
 
         if (data.version !== 1) {
-          toast.error("지원하지 않는 백업 형식입니다");
+          toast.error(t("settings.importBadFormat"));
           return;
         }
 
         const now = Date.now();
 
-        // Encrypt and store categories
         for (const cat of data.categories) {
           const encrypted: Category = {
             ...cat,
@@ -179,7 +263,6 @@ export default function SettingsPage() {
           await db.categories.put(encrypted);
         }
 
-        // Encrypt and store notes
         for (const note of data.notes) {
           const encrypted: Note = {
             ...note,
@@ -189,7 +272,6 @@ export default function SettingsPage() {
           await db.notes.put(encrypted);
         }
 
-        // Encrypt and store blocks
         for (const block of data.blocks) {
           const encrypted: Block = {
             ...block,
@@ -200,36 +282,37 @@ export default function SettingsPage() {
         }
 
         toast.success(
-          `가져오기 완료: 노트 ${data.notes.length}개, 카테고리 ${data.categories.length}개`
+          `${t("settings.importCompleteNotes")}${data.notes.length}${t("settings.importCompleteCategories")}${data.categories.length}${t("settings.importCompleteUnit")}`
         );
       } catch (err) {
         console.error("[import]", err);
-        toast.error("가져오기에 실패했습니다. 파일을 확인해주세요.");
+        toast.error(t("settings.importError"));
       } finally {
         setImporting(false);
       }
     },
-    [encryptText]
+    [encryptText, t]
   );
 
   return (
     <div className="grid gap-6 max-w-2xl">
-      <h1 className="text-2xl font-semibold tracking-tight">설정</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{t("settings.title")}</h1>
 
       {/* ── Security ──────────────────────────────────── */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Lock className="h-4 w-4" />
-            보안
+            {t("settings.security")}
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-6">
+          {/* Auto Lock */}
           <div className="flex items-center justify-between">
             <div className="grid gap-1">
-              <p className="text-sm font-medium">자동 잠금</p>
+              <p className="text-sm font-medium">{t("settings.autoLock")}</p>
               <p className="text-sm text-muted-foreground">
-                비활동 시 자동으로 앱을 잠급니다
+                {t("settings.autoLockDesc")}
               </p>
             </div>
             <Select
@@ -251,16 +334,132 @@ export default function SettingsPage() {
 
           <Separator />
 
+          {/* Password Change */}
+          <div className="grid gap-4">
+            <div className="grid gap-1">
+              <p className="text-sm font-medium">{t("settings.changePassword")}</p>
+              <p className="text-sm text-muted-foreground">
+                {t("settings.changePasswordDesc")}
+              </p>
+            </div>
+            <div className="grid gap-3">
+              <div className="relative">
+                <Input
+                  type={showPw ? "text" : "password"}
+                  placeholder={t("settings.currentPassword")}
+                  value={currentPw}
+                  onChange={(e) => setCurrentPw(e.target.value)}
+                  autoComplete="off"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="absolute right-1 top-1/2 -translate-y-1/2"
+                  onClick={() => setShowPw(!showPw)}
+                >
+                  {showPw ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <Input
+                type={showPw ? "text" : "password"}
+                placeholder={t("settings.newPassword")}
+                value={newPw}
+                onChange={(e) => setNewPw(e.target.value)}
+                autoComplete="off"
+              />
+              <Input
+                type={showPw ? "text" : "password"}
+                placeholder={t("settings.confirmPassword")}
+                value={confirmPw}
+                onChange={(e) => setConfirmPw(e.target.value)}
+                autoComplete="off"
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleChangePassword}
+                disabled={changingPw}
+              >
+                {changingPw ? t("settings.changingPassword") : t("settings.changePasswordButton")}
+              </Button>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Recovery Key */}
+          <div className="grid gap-4">
+            <div className="flex items-center justify-between">
+              <div className="grid gap-1">
+                <p className="text-sm font-medium">{t("settings.recoveryKey")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.recoveryKeyDesc")}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleShowRecoveryKey}
+                disabled={recoveryLoading}
+              >
+                <KeyRound className="h-4 w-4 mr-2" />
+                {recoveryKey ? t("settings.recoveryHide") : recoveryLoading ? t("settings.recoveryLoading") : t("settings.recoveryShow")}
+              </Button>
+            </div>
+
+            {recoveryKey && (
+              <div className="flex items-center gap-2 rounded-xl bg-muted p-4">
+                <code className="flex-1 break-all text-sm font-mono select-all">
+                  {recoveryKey}
+                </code>
+                <Button variant="ghost" size="xs" onClick={handleCopyRecoveryKey}>
+                  {recoveryCopied ? (
+                    <Check className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* Language */}
           <div className="flex items-center justify-between">
             <div className="grid gap-1">
-              <p className="text-sm font-medium">지금 잠그기</p>
+              <p className="text-sm font-medium">{t("settings.language")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.languageDesc")}</p>
+            </div>
+            <Select value={language} onValueChange={(v) => setLanguage(v as Language)}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ko">한국어</SelectItem>
+                <SelectItem value="en">English</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Separator />
+
+          {/* Lock Now */}
+          <div className="flex items-center justify-between">
+            <div className="grid gap-1">
+              <p className="text-sm font-medium">{t("settings.lockNow")}</p>
               <p className="text-sm text-muted-foreground">
-                즉시 앱을 잠금 상태로 전환합니다
+                {t("settings.lockNowDesc")}
               </p>
             </div>
             <Button variant="outline" size="sm" onClick={lock}>
               <Shield className="h-4 w-4 mr-2" />
-              잠금
+              {t("settings.lockButton")}
             </Button>
           </div>
         </CardContent>
@@ -271,15 +470,15 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Download className="h-4 w-4" />
-            데이터
+            {t("settings.data")}
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-6">
           <div className="flex items-center justify-between">
             <div className="grid gap-1">
-              <p className="text-sm font-medium">내보내기</p>
+              <p className="text-sm font-medium">{t("settings.export")}</p>
               <p className="text-sm text-muted-foreground">
-                모든 노트와 카테고리를 JSON으로 저장합니다
+                {t("settings.exportDesc")}
               </p>
             </div>
             <Button
@@ -289,7 +488,7 @@ export default function SettingsPage() {
               disabled={exporting}
             >
               <Download className="h-4 w-4 mr-2" />
-              {exporting ? "내보내는 중…" : "내보내기"}
+              {exporting ? t("settings.exporting") : t("settings.export")}
             </Button>
           </div>
 
@@ -297,9 +496,9 @@ export default function SettingsPage() {
 
           <div className="flex items-center justify-between">
             <div className="grid gap-1">
-              <p className="text-sm font-medium">가져오기</p>
+              <p className="text-sm font-medium">{t("settings.import")}</p>
               <p className="text-sm text-muted-foreground">
-                백업 파일에서 데이터를 복원합니다
+                {t("settings.importDesc")}
               </p>
             </div>
             <Button
@@ -309,7 +508,7 @@ export default function SettingsPage() {
               disabled={importing}
             >
               <Upload className="h-4 w-4 mr-2" />
-              {importing ? "가져오는 중…" : "가져오기"}
+              {importing ? t("settings.importing") : t("settings.import")}
             </Button>
             <input
               ref={fileInputRef}
@@ -327,12 +526,12 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Keyboard className="h-4 w-4" />
-            키보드 단축키
+            {t("settings.shortcuts")}
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid gap-3">
-            <p className="text-sm font-medium text-muted-foreground">에디터</p>
+            <p className="text-sm font-medium text-muted-foreground">{t("settings.editor")}</p>
             {SHORTCUTS.map(({ keys, desc }) => (
               <div
                 key={desc}
@@ -352,7 +551,7 @@ export default function SettingsPage() {
 
           <div className="grid gap-3">
             <p className="text-sm font-medium text-muted-foreground">
-              슬래시 명령
+              {t("settings.slashCommands")}
             </p>
             {SLASH_COMMANDS.map(({ command, desc }) => (
               <div
@@ -369,7 +568,7 @@ export default function SettingsPage() {
 
       {/* ── Info ──────────────────────────────────────── */}
       <div className="text-center text-xs text-muted-foreground pb-6">
-        basic note — AES-256-GCM 암호화
+        {t("settings.footer")}
       </div>
     </div>
   );

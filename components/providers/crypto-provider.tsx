@@ -12,12 +12,20 @@ import {
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import {
-  createEncryptionSetup,
-  verifyPassword,
+  createMasterKeySetup,
+  verifyAndUnwrapMasterKey,
+  verifyPasswordLegacy,
+  recoverMasterKey,
+  rewrapMasterKey,
+  generateMasterKey,
+  generateRecoveryKey,
+  normalizeRecoveryKey,
+  wrapMasterKey,
+  deriveKey,
   encrypt,
   decrypt,
 } from "@/lib/crypto";
-import { DEFAULT_LOCK_TIMEOUT_MINUTES } from "@/lib/constants";
+import { DEFAULT_LOCK_TIMEOUT_MINUTES, VERIFIER_PLAINTEXT } from "@/lib/constants";
 import {
   syncPull,
   syncPush,
@@ -28,26 +36,22 @@ import {
 } from "@/lib/sync/engine";
 
 interface CryptoContextValue {
-  /** Whether we have a master password set up at all */
   isSetup: boolean;
-  /** Whether the app is currently unlocked */
   isUnlocked: boolean;
-  /** Loading state while checking setup */
   isLoading: boolean;
-  /** Current lock timeout in minutes */
   lockTimeoutMinutes: number;
-  /** Set up the master password for the first time */
+  /** Non-null when user must save their recovery key (after setup or migration) */
+  pendingRecoveryKey: string | null;
   setup: (password: string) => Promise<void>;
-  /** Unlock with password */
   unlock: (password: string) => Promise<boolean>;
-  /** Lock immediately */
   lock: () => void;
-  /** Change the lock timeout */
   setLockTimeout: (minutes: number) => Promise<void>;
-  /** Encrypt a string */
   encryptText: (plaintext: string) => Promise<string>;
-  /** Decrypt a string */
   decryptText: (encrypted: string) => Promise<string>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
+  recoverWithKey: (recoveryKey: string, newPassword: string) => Promise<boolean>;
+  getRecoveryKey: () => Promise<string | null>;
+  dismissRecoveryKey: () => void;
 }
 
 const SESSION_PW_KEY = "bn_session_pw";
@@ -86,59 +90,146 @@ function clearSession() {
 
 const CryptoContext = createContext<CryptoContextValue | null>(null);
 
+// ─── Migration: re-encrypt all data from old key to new master key ──
+
+async function migrateData(
+  oldKey: CryptoKey,
+  masterKey: CryptoKey
+) {
+  const categories = await db.categories.toArray();
+  const notes = await db.notes.toArray();
+  const blocks = await db.blocks.toArray();
+
+  // Decrypt all with old key
+  const plainCats = await Promise.all(
+    categories.map(async (c) => {
+      try {
+        return { ...c, name: c.name ? await decrypt(oldKey, c.name) : "" };
+      } catch {
+        return c;
+      }
+    })
+  );
+  const plainNotes = await Promise.all(
+    notes.map(async (n) => {
+      try {
+        return { ...n, title: n.title ? await decrypt(oldKey, n.title) : "" };
+      } catch {
+        return n;
+      }
+    })
+  );
+  const plainBlocks = await Promise.all(
+    blocks.map(async (b) => {
+      try {
+        return { ...b, content: b.content ? await decrypt(oldKey, b.content) : "" };
+      } catch {
+        return b;
+      }
+    })
+  );
+
+  // Re-encrypt with master key
+  const encCats = await Promise.all(
+    plainCats.map(async (c) => ({
+      ...c,
+      name: c.name ? await encrypt(masterKey, c.name) : "",
+    }))
+  );
+  const encNotes = await Promise.all(
+    plainNotes.map(async (n) => ({
+      ...n,
+      title: n.title ? await encrypt(masterKey, n.title) : "",
+    }))
+  );
+  const encBlocks = await Promise.all(
+    plainBlocks.map(async (b) => ({
+      ...b,
+      content: b.content ? await encrypt(masterKey, b.content) : "",
+    }))
+  );
+
+  // Write to DB in transaction
+  await db.transaction(
+    "rw",
+    db.categories,
+    db.notes,
+    db.blocks,
+    async () => {
+      await db.categories.bulkPut(encCats);
+      await db.notes.bulkPut(encNotes);
+      await db.blocks.bulkPut(encBlocks);
+    }
+  );
+}
+
 export function CryptoProvider({ children }: { children: ReactNode }) {
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [pendingRecoveryKey, setPendingRecoveryKey] = useState<string | null>(null);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoUnlockAttempted = useRef(false);
 
-  // null = still loading, undefined = no settings, AppSettings = has settings
   const settings = useLiveQuery(() => db.settings.get("settings"), [], null);
 
   const isSetup = settings !== null && settings !== undefined;
   const isUnlocked = !!cryptoKey;
+  const isNewSchema = !!settings?.encryptedMasterKey;
 
-  // loading resolves once the query has returned (null → undefined or AppSettings)
-  // If no local settings, try pulling from Supabase (new device scenario)
   useEffect(() => {
-    if (settings === null) return; // still loading local query
+    if (settings === null) return;
     if (settings !== undefined) {
       setIsLoading(false);
       return;
     }
-    // settings === undefined → no local settings, try remote
     syncPullSettings()
       .then(async (remote) => {
-        if (remote) {
-          await db.settings.put(remote);
-        }
+        if (remote) await db.settings.put(remote);
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
   }, [settings]);
 
-  // Auto-unlock from session on refresh
+  // Auto-unlock from session
   useEffect(() => {
     if (autoUnlockAttempted.current || !settings || cryptoKey) return;
     autoUnlockAttempted.current = true;
     const timeout = settings.lockTimeoutMinutes ?? DEFAULT_LOCK_TIMEOUT_MINUTES;
     const savedPw = loadSession(timeout);
     if (!savedPw) return;
-    verifyPassword(savedPw, settings.encryptionSalt, settings.encryptionVerifier)
-      .then((key) => {
-        if (key) {
-          setCryptoKey(key);
-          saveSession(savedPw);
-          syncPush().then(() => syncPull());
-          startAutoSync();
-        } else {
-          clearSession();
-        }
-      })
-      .catch(() => clearSession());
+
+    const doAutoUnlock = async () => {
+      let key: CryptoKey | null = null;
+      if (settings.encryptedMasterKey) {
+        key = await verifyAndUnwrapMasterKey(
+          savedPw,
+          settings.encryptionSalt,
+          settings.encryptionVerifier,
+          settings.encryptedMasterKey
+        );
+      } else {
+        key = await verifyPasswordLegacy(
+          savedPw,
+          settings.encryptionSalt,
+          settings.encryptionVerifier
+        );
+        // Don't auto-migrate on session restore to avoid surprise delays
+        // Migration will happen on next manual unlock
+      }
+      if (key) {
+        setCryptoKey(key);
+        saveSession(savedPw);
+        syncPush().then(() => syncPull());
+        startAutoSync();
+      } else {
+        clearSession();
+      }
+    };
+
+    doAutoUnlock().catch(() => clearSession());
   }, [settings, cryptoKey]);
 
-  // Safety timeout: force loading off if stuck (e.g. IndexedDB blocked)
+  // Safety timeout
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 5000);
     return () => clearTimeout(timer);
@@ -148,7 +239,6 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
   const resetIdleTimer = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     if (!cryptoKey) return;
-    // Refresh session timestamp on activity
     try {
       const pw = sessionStorage.getItem(SESSION_PW_KEY);
       if (pw) sessionStorage.setItem(SESSION_TS_KEY, String(Date.now()));
@@ -163,73 +253,222 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!cryptoKey) return;
-
     const events = ["mousedown", "keydown", "touchstart", "scroll"];
     events.forEach((e) => window.addEventListener(e, resetIdleTimer));
     resetIdleTimer();
-
     return () => {
       events.forEach((e) => window.removeEventListener(e, resetIdleTimer));
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     };
   }, [cryptoKey, resetIdleTimer]);
 
-  // ── Actions ─────────────────────────────────────────────────
+  // ── Setup (first time) ─────────────────────────────────────
   const setup = useCallback(async (password: string) => {
-    const { salt, verifier, key } = await createEncryptionSetup(password);
+    const result = await createMasterKeySetup(password);
     const now = Date.now();
     await db.settings.put({
       id: "settings",
-      encryptionSalt: salt,
-      encryptionVerifier: verifier,
+      encryptionSalt: result.salt,
+      encryptionVerifier: result.verifier,
+      encryptedMasterKey: result.encryptedMasterKey,
+      recoverySalt: result.recoverySalt,
+      recoveryEncryptedMasterKey: result.recoveryEncryptedMasterKey,
+      recoveryKeyEncrypted: result.recoveryKeyEncrypted,
       lockTimeoutMinutes: DEFAULT_LOCK_TIMEOUT_MINUTES,
       defaultView: "list",
       createdAt: now,
       updatedAt: now,
     });
-    setCryptoKey(key);
+    setCryptoKey(result.masterKey);
     saveSession(password);
+    setPendingRecoveryKey(result.recoveryKey);
     await syncPushSettings();
     startAutoSync();
   }, []);
 
+  // ── Unlock ─────────────────────────────────────────────────
   const unlock = useCallback(
     async (password: string): Promise<boolean> => {
       if (!settings) return false;
-      const key = await verifyPassword(
-        password,
-        settings.encryptionSalt,
-        settings.encryptionVerifier
-      );
-      if (key) {
-        setCryptoKey(key);
+
+      if (settings.encryptedMasterKey) {
+        // New schema: unwrap master key
+        const masterKey = await verifyAndUnwrapMasterKey(
+          password,
+          settings.encryptionSalt,
+          settings.encryptionVerifier,
+          settings.encryptedMasterKey
+        );
+        if (!masterKey) return false;
+        setCryptoKey(masterKey);
         saveSession(password);
         syncPush().then(() => syncPull());
         startAutoSync();
         return true;
       }
-      return false;
+
+      // Legacy schema: verify then migrate
+      const oldKey = await verifyPasswordLegacy(
+        password,
+        settings.encryptionSalt,
+        settings.encryptionVerifier
+      );
+      if (!oldKey) return false;
+
+      // Migrate to master key architecture
+      const masterKey = await generateMasterKey();
+      await migrateData(oldKey, masterKey);
+
+      // Setup wrapping + recovery
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const wrappingKey = await deriveKey(password, salt);
+      const verifier = await encrypt(wrappingKey, VERIFIER_PLAINTEXT);
+      const encryptedMasterKey = await wrapMasterKey(masterKey, wrappingKey);
+
+      const recoveryKey = generateRecoveryKey();
+      const recoverySalt = crypto.getRandomValues(new Uint8Array(16));
+      const recoveryWrappingKey = await deriveKey(
+        normalizeRecoveryKey(recoveryKey),
+        recoverySalt
+      );
+      const recoveryEncryptedMasterKey = await wrapMasterKey(
+        masterKey,
+        recoveryWrappingKey
+      );
+      const recoveryKeyEncrypted = await encrypt(masterKey, recoveryKey);
+
+      await db.settings.update("settings", {
+        encryptionSalt: btoa(String.fromCharCode(...salt)),
+        encryptionVerifier: verifier,
+        encryptedMasterKey,
+        recoverySalt: btoa(String.fromCharCode(...recoverySalt)),
+        recoveryEncryptedMasterKey,
+        recoveryKeyEncrypted,
+        updatedAt: Date.now(),
+      });
+
+      setCryptoKey(masterKey);
+      saveSession(password);
+      setPendingRecoveryKey(recoveryKey);
+      await syncPushSettings();
+      syncPush().then(() => syncPull());
+      startAutoSync();
+      return true;
     },
     [settings]
   );
 
+  // ── Lock ───────────────────────────────────────────────────
   const lock = useCallback(() => {
     stopAutoSync();
     clearSession();
     setCryptoKey(null);
   }, []);
 
-  const setLockTimeout = useCallback(
-    async (minutes: number) => {
+  // ── Change Password ────────────────────────────────────────
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string): Promise<boolean> => {
+      if (!settings || !cryptoKey) return false;
+
+      // Verify current password
+      if (settings.encryptedMasterKey) {
+        const check = await verifyAndUnwrapMasterKey(
+          currentPassword,
+          settings.encryptionSalt,
+          settings.encryptionVerifier,
+          settings.encryptedMasterKey
+        );
+        if (!check) return false;
+      } else {
+        const check = await verifyPasswordLegacy(
+          currentPassword,
+          settings.encryptionSalt,
+          settings.encryptionVerifier
+        );
+        if (!check) return false;
+      }
+
+      // Re-wrap master key with new password
+      const { salt, verifier, encryptedMasterKey } = await rewrapMasterKey(
+        cryptoKey,
+        newPassword
+      );
+
       await db.settings.update("settings", {
-        lockTimeoutMinutes: minutes,
+        encryptionSalt: salt,
+        encryptionVerifier: verifier,
+        encryptedMasterKey,
         updatedAt: Date.now(),
       });
+
+      saveSession(newPassword);
       await syncPushSettings();
+      return true;
     },
-    []
+    [settings, cryptoKey]
   );
 
+  // ── Recover with Recovery Key ──────────────────────────────
+  const recoverWithKey = useCallback(
+    async (recoveryKey: string, newPassword: string): Promise<boolean> => {
+      if (!settings?.recoverySalt || !settings?.recoveryEncryptedMasterKey) {
+        return false;
+      }
+
+      const masterKey = await recoverMasterKey(
+        recoveryKey,
+        settings.recoverySalt,
+        settings.recoveryEncryptedMasterKey
+      );
+      if (!masterKey) return false;
+
+      // Re-wrap with new password
+      const { salt, verifier, encryptedMasterKey } = await rewrapMasterKey(
+        masterKey,
+        newPassword
+      );
+
+      await db.settings.update("settings", {
+        encryptionSalt: salt,
+        encryptionVerifier: verifier,
+        encryptedMasterKey,
+        updatedAt: Date.now(),
+      });
+
+      setCryptoKey(masterKey);
+      saveSession(newPassword);
+      await syncPushSettings();
+      syncPush().then(() => syncPull());
+      startAutoSync();
+      return true;
+    },
+    [settings]
+  );
+
+  // ── Get Recovery Key (from settings, decrypted) ────────────
+  const getRecoveryKey = useCallback(async (): Promise<string | null> => {
+    if (!cryptoKey || !settings?.recoveryKeyEncrypted) return null;
+    try {
+      return await decrypt(cryptoKey, settings.recoveryKeyEncrypted);
+    } catch {
+      return null;
+    }
+  }, [cryptoKey, settings?.recoveryKeyEncrypted]);
+
+  const dismissRecoveryKey = useCallback(() => {
+    setPendingRecoveryKey(null);
+  }, []);
+
+  // ── Lock Timeout ───────────────────────────────────────────
+  const setLockTimeout = useCallback(async (minutes: number) => {
+    await db.settings.update("settings", {
+      lockTimeoutMinutes: minutes,
+      updatedAt: Date.now(),
+    });
+    await syncPushSettings();
+  }, []);
+
+  // ── Encrypt / Decrypt ─────────────────────────────────────
   const encryptText = useCallback(
     async (plaintext: string): Promise<string> => {
       if (!cryptoKey) throw new Error("App is locked");
@@ -253,12 +492,17 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
         isUnlocked,
         isLoading,
         lockTimeoutMinutes: settings?.lockTimeoutMinutes ?? DEFAULT_LOCK_TIMEOUT_MINUTES,
+        pendingRecoveryKey,
         setup,
         unlock,
         lock,
         setLockTimeout,
         encryptText,
         decryptText,
+        changePassword,
+        recoverWithKey,
+        getRecoveryKey,
+        dismissRecoveryKey,
       }}
     >
       {children}

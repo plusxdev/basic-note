@@ -27,21 +27,23 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCrypto } from "@/components/providers/crypto-provider";
+import { useLanguage } from "@/components/providers/language-provider";
 import { useCategories } from "@/hooks/use-categories";
 import { CategoryTree } from "./category-tree";
 import { CategoryDialog } from "@/components/dialogs/category-dialog";
 
-const NAV_ITEMS = [
-  { href: "/notes", label: "모든 노트", icon: FileText },
-  { href: "/notes/calendar", label: "캘린더", icon: Calendar },
-  { href: "/notes/categories", label: "카테고리", icon: FolderTree },
-] as const;
-
 export function AppSidebar() {
   const pathname = usePathname();
   const { lock } = useCrypto();
+  const { t } = useLanguage();
   const { createCategory } = useCategories();
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+
+  const NAV_ITEMS = [
+    { href: "/notes", label: t("nav.allNotes"), icon: FileText },
+    { href: "/notes/calendar", label: t("nav.calendar"), icon: Calendar },
+    { href: "/notes/categories", label: t("nav.categories"), icon: FolderTree },
+  ];
 
   return (
     <>
@@ -49,13 +51,10 @@ export function AppSidebar() {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
+            <SidebarMenuButton asChild tooltip="basic note">
               <Link href="/notes">
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold tracking-tight">
-                    basic note
-                  </span>
-                </div>
+                <span className="logo-icon size-4 shrink-0 rounded-sm bg-foreground text-background text-[10px] font-bold leading-none text-center mt-[8px]" style={{lineHeight:"16px"}}>b</span>
+                <span className="font-semibold tracking-tight text-sm">basic note</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -64,7 +63,7 @@ export function AppSidebar() {
 
       <SidebarContent>
         {/* Navigation */}
-        <SidebarGroup>
+        <SidebarGroup className="mt-[10px]">
           <SidebarGroupLabel className="sr-only">탐색</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -76,6 +75,7 @@ export function AppSidebar() {
                     tooltip={item.label}
                   >
                     <Link href={item.href}>
+                      <item.icon className="nav-icon h-4 w-4 shrink-0" />
                       <span>{item.label}</span>
                     </Link>
                   </SidebarMenuButton>
@@ -86,11 +86,11 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* Categories */}
-        <SidebarGroup className="mt-[9px]">
+        <SidebarGroup className="mt-[11px]">
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => setCategoryDialogOpen(true)} tooltip="카테고리 추가">
+                <SidebarMenuButton onClick={() => setCategoryDialogOpen(true)} tooltip={t("categoryDialog.title")}>
                   <Plus className="h-4 w-4" />
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -103,17 +103,17 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="설정">
+            <SidebarMenuButton asChild tooltip={t("nav.settings")}>
               <Link href="/settings">
                 <Settings />
-                <span>설정</span>
+                <span>{t("nav.settings")}</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={lock} tooltip="잠금">
+            <SidebarMenuButton onClick={lock} tooltip={t("nav.lock")}>
               <Lock />
-              <span>잠금</span>
+              <span>{t("nav.lock")}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -125,7 +125,7 @@ export function AppSidebar() {
       onOpenChange={setCategoryDialogOpen}
       onSubmit={async (name) => {
         await createCategory(name);
-        toast.success("카테고리를 추가했습니다");
+        toast.success(t("categoryDialog.added"));
       }}
     />
     </>
