@@ -4,6 +4,15 @@ import type { Category, Note, Block, AppSettings } from "@/lib/types";
 
 type EntityType = "category" | "note" | "block";
 
+/**
+ * Dev builds share the same Supabase project as production, which means any
+ * entity pushed from dev leaks into prod as undecryptable "복호화 실패" items.
+ * Gate all sync calls so they only run in production unless explicitly enabled.
+ */
+const SYNC_ENABLED =
+  process.env.NODE_ENV === "production" ||
+  process.env.NEXT_PUBLIC_ENABLE_SYNC === "true";
+
 interface EncryptedEntity {
   id: string;
   entity_type: EntityType;
@@ -133,6 +142,7 @@ function setLastSyncAt(ts: number) {
 }
 
 export async function syncPush() {
+  if (!SYNC_ENABLED) return;
   if (!navigator.onLine) return;
 
   try {
@@ -165,6 +175,7 @@ export async function syncPush() {
 }
 
 export async function syncPull() {
+  if (!SYNC_ENABLED) return;
   if (!navigator.onLine) return;
 
   try {
@@ -179,6 +190,7 @@ export async function syncPull() {
 }
 
 export async function syncPullSettings(): Promise<AppSettings | null> {
+  if (!SYNC_ENABLED) return null;
   if (!navigator.onLine) return null;
   return pullSettings();
 }
@@ -189,6 +201,7 @@ export async function syncPushEntity(
   entityType: EntityType,
   entity: Category | Note | Block
 ) {
+  if (!SYNC_ENABLED) return;
   if (!navigator.onLine) return;
   try {
     await pushEntity(entityType, entity);
@@ -198,6 +211,7 @@ export async function syncPushEntity(
 }
 
 export async function syncPushSettings() {
+  if (!SYNC_ENABLED) return;
   if (!navigator.onLine) return;
   try {
     const settings = await db.settings.get("settings");
@@ -254,6 +268,7 @@ async function handleRealtimeChange(payload: {
 // ─── Auto Sync ───────────────────────────────────────────────
 
 export function startAutoSync() {
+  if (!SYNC_ENABLED) return;
   stopAutoSync();
 
   // Initial pull
