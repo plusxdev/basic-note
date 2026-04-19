@@ -19,7 +19,9 @@ export function QuoteBlock({
   }, [registerRef]);
 
   useEffect(() => {
-    if (ref.current && ref.current.textContent !== content) {
+    if (!ref.current) return;
+    if (document.activeElement === ref.current) return;
+    if (ref.current.textContent !== content) {
       ref.current.textContent = content;
     }
   }, [content]);

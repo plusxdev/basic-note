@@ -24,6 +24,37 @@ import { MobileBlockMenu } from "./mobile-block-menu";
 import { MAX_INDENT } from "@/lib/constants";
 import type { BlockType, BlockMeta } from "@/lib/types";
 
+/** Caret offset (character count) within an element, using the current Selection. */
+function getCaretOffset(el: HTMLElement): number {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return 0;
+  const range = sel.getRangeAt(0);
+  if (!el.contains(range.endContainer)) return 0;
+  const pre = range.cloneRange();
+  pre.selectNodeContents(el);
+  pre.setEnd(range.endContainer, range.endOffset);
+  return pre.toString().length;
+}
+
+/** Cross-browser caretRangeFromPoint */
+function caretRangeAt(x: number, y: number): Range | null {
+  const d = document as Document & {
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+  };
+  if (d.caretPositionFromPoint) {
+    const pos = d.caretPositionFromPoint(x, y);
+    if (pos) {
+      const r = document.createRange();
+      r.setStart(pos.offsetNode, pos.offset);
+      r.collapse(true);
+      return r;
+    }
+  }
+  if (d.caretRangeFromPoint) return d.caretRangeFromPoint(x, y);
+  return null;
+}
+
 interface BlockEditorProps {
   noteId: string;
 }
@@ -110,6 +141,8 @@ export function BlockEditor({ noteId }: BlockEditorProps) {
 
   const blockRefs = useRef<Map<number, HTMLElement>>(new Map());
   const saveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  /** Sticky column X (viewport) for vertical cursor nav. Reset on horizontal move/click/type. */
+  const stickyXRef = useRef<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -143,14 +176,42 @@ export function BlockEditor({ noteId }: BlockEditorProps) {
     []
   );
 
-  const focusBlock = useCallback((index: number) => {
-    setFocusedIndex(index);
-    // Small delay to let React render
-    requestAnimationFrame(() => {
-      const el = blockRefs.current.get(index);
-      if (el) el.focus();
-    });
-  }, []);
+  const focusBlock = useCallback(
+    (index: number, placeAtEnd = false, targetX?: number) => {
+      setFocusedIndex(index);
+      requestAnimationFrame(() => {
+        const el = blockRefs.current.get(index);
+        if (!el) return;
+        el.focus();
+
+        // If we have a target X coordinate, try to preserve the column
+        if (typeof targetX === "number") {
+          const elRect = el.getBoundingClientRect();
+          const lineH = parseFloat(getComputedStyle(el).lineHeight) || 24;
+          const y = placeAtEnd
+            ? elRect.bottom - lineH / 2
+            : elRect.top + lineH / 2;
+          const range = caretRangeAt(targetX, y);
+          if (range) {
+            const sel = window.getSelection();
+            sel?.removeAllRanges();
+            sel?.addRange(range);
+            return;
+          }
+        }
+
+        try {
+          const range = document.createRange();
+          const sel = window.getSelection();
+          range.selectNodeContents(el);
+          range.collapse(!placeAtEnd);
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+        } catch {}
+      });
+    },
+    []
+  );
 
   const handleContentChange = useCallback(
     (blockId: string, content: string) => {
@@ -200,6 +261,11 @@ export function BlockEditor({ noteId }: BlockEditorProps) {
       const block = blocks[index];
       if (!block) return;
 
+      // Any non-vertical key breaks the sticky column
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") {
+        stickyXRef.current = null;
+      }
+
       // Get actual DOM content (not debounced state)
       const el = blockRefs.current.get(index);
       const liveContent = el?.textContent?.trim() ?? block.decryptedContent;
@@ -208,6 +274,9 @@ export function BlockEditor({ noteId }: BlockEditorProps) {
       if (e.key === "Enter" && !e.shiftKey) {
         if (block.type === "code") return; // Allow newlines in code blocks
         e.preventDefault();
+        // During IME composition Enter commits the composition; skip the
+        // "create block" action (the post-commit Enter fires it as a separate event)
+        if (e.nativeEvent.isComposing || e.keyCode === 229) return;
 
         // If current block is an empty list-type, convert to text
         if (
@@ -218,12 +287,15 @@ export function BlockEditor({ noteId }: BlockEditorProps) {
           return;
         }
 
-        // Flush current content before creating new block
-        if (liveContent !== block.decryptedContent) {
-          const existing = saveTimers.current.get(block.id);
-          if (existing) clearTimeout(existing);
-          updateBlock(block.id, { content: liveContent });
-        }
+        // Split current block at the caret: everything before stays, everything after moves to new block
+        const caret = el ? getCaretOffset(el) : liveContent.length;
+        const before = liveContent.slice(0, caret);
+        const after = liveContent.slice(caret);
+
+        const existing = saveTimers.current.get(block.id);
+        if (existing) clearTimeout(existing);
+        updateBlock(block.id, { content: before });
+        if (el) el.textContent = before;
 
         const newType: BlockType =
           ["bullet", "numbered", "todo"].includes(block.type)
@@ -232,8 +304,8 @@ export function BlockEditor({ noteId }: BlockEditorProps) {
         const newMeta: BlockMeta =
           block.type === "todo" ? { checked: false } : {};
 
-        createBlock(block.id, newType, "", newMeta).then(() => {
-          focusBlock(index + 1);
+        createBlock(block.id, newType, after, newMeta).then(() => {
+          focusBlock(index + 1, false);
         });
         return;
       }
@@ -248,7 +320,7 @@ export function BlockEditor({ noteId }: BlockEditorProps) {
         if (blocks.length > 1) {
           e.preventDefault();
           deleteBlock(block.id);
-          focusBlock(Math.max(0, index - 1));
+          focusBlock(Math.max(0, index - 1), true);
           return;
         }
       }
@@ -271,35 +343,49 @@ export function BlockEditor({ noteId }: BlockEditorProps) {
         return;
       }
 
-      // Arrow Up — focus previous
+      // Arrow Up — focus previous, preserving column
       if (e.key === "ArrowUp" && index > 0) {
+        // Let IME commit first; otherwise the in-progress jamo jumps to the target block
+        if (e.nativeEvent.isComposing || e.keyCode === 229) return;
         const sel = window.getSelection();
         const el = e.target as HTMLElement;
-        if (sel && sel.rangeCount > 0) {
-          const range = sel.getRangeAt(0);
-          const rect = range.getBoundingClientRect();
-          const elRect = el.getBoundingClientRect();
-          // Only move if cursor is at the top of the block
-          if (rect.top <= elRect.top + 2) {
-            e.preventDefault();
-            focusBlock(index - 1);
+        if (!sel || sel.rangeCount === 0) return;
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        const lineH = parseFloat(getComputedStyle(el).lineHeight) || 24;
+        const isEmpty = !el.textContent;
+        const onFirstLine =
+          rect.height === 0 || rect.top - elRect.top < lineH;
+        if (isEmpty || onFirstLine) {
+          e.preventDefault();
+          if (stickyXRef.current === null) {
+            stickyXRef.current = rect.left || elRect.left;
           }
+          focusBlock(index - 1, true, stickyXRef.current);
         }
         return;
       }
 
-      // Arrow Down — focus next
+      // Arrow Down — focus next, preserving column
       if (e.key === "ArrowDown" && index < blocks.length - 1) {
+        if (e.nativeEvent.isComposing || e.keyCode === 229) return;
         const sel = window.getSelection();
         const el = e.target as HTMLElement;
-        if (sel && sel.rangeCount > 0) {
-          const range = sel.getRangeAt(0);
-          const rect = range.getBoundingClientRect();
-          const elRect = el.getBoundingClientRect();
-          if (rect.bottom >= elRect.bottom - 2) {
-            e.preventDefault();
-            focusBlock(index + 1);
+        if (!sel || sel.rangeCount === 0) return;
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        const lineH = parseFloat(getComputedStyle(el).lineHeight) || 24;
+        const isEmpty = !el.textContent;
+        const onLastLine =
+          rect.height === 0 || elRect.bottom - rect.bottom < lineH;
+        if (isEmpty || onLastLine) {
+          e.preventDefault();
+          if (stickyXRef.current === null) {
+            stickyXRef.current = rect.left || elRect.left;
           }
+          focusBlock(index + 1, false, stickyXRef.current);
         }
         return;
       }
@@ -415,7 +501,12 @@ export function BlockEditor({ noteId }: BlockEditorProps) {
           items={blocks.map((b) => b.id)}
           strategy={verticalListSortingStrategy}
         >
-          <div className="grid gap-1">
+          <div
+            className="grid gap-1"
+            onPointerDown={() => {
+              stickyXRef.current = null;
+            }}
+          >
             {blocks.map((block, index) => (
               <SortableBlock
                 key={block.id}

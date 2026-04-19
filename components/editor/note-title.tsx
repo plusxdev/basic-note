@@ -12,7 +12,9 @@ export function NoteTitle({ title, onTitleChange, onEnter }: NoteTitleProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (ref.current && ref.current.textContent !== title) {
+    if (!ref.current) return;
+    if (document.activeElement === ref.current) return;
+    if (ref.current.textContent !== title) {
       ref.current.textContent = title;
     }
   }, [title]);
@@ -26,7 +28,10 @@ export function NoteTitle({ title, onTitleChange, onEnter }: NoteTitleProps) {
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter") {
+        // Always suppress default to prevent stray <br>/newline during IME composition.
+        // Action only fires when composition is idle (the "real" Enter after commit).
         e.preventDefault();
+        if (e.nativeEvent.isComposing || e.keyCode === 229) return;
         onEnter();
       }
     },

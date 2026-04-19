@@ -19,7 +19,10 @@ export function TextBlock({
   }, [registerRef]);
 
   useEffect(() => {
-    if (ref.current && ref.current.textContent !== content) {
+    if (!ref.current) return;
+    // Don't overwrite DOM while user is editing — that resets cursor to start
+    if (document.activeElement === ref.current) return;
+    if (ref.current.textContent !== content) {
       ref.current.textContent = content;
     }
   }, [content]);
