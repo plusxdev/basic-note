@@ -26,6 +26,7 @@ import {
   decrypt,
 } from "@/lib/crypto";
 import { DEFAULT_LOCK_TIMEOUT_MINUTES, VERIFIER_PLAINTEXT } from "@/lib/constants";
+import { RESET_PENDING_KEY, LAST_SYNC_KEY } from "@/lib/reset";
 import {
   syncPull,
   syncPush,
@@ -171,6 +172,15 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
       return;
     }
+    // After a reset, skip remote settings pull so the user can freshly set up
+    // without the old encryptedMasterKey coming back from Supabase.
+    if (
+      typeof window !== "undefined" &&
+      localStorage.getItem(RESET_PENDING_KEY) === "1"
+    ) {
+      setIsLoading(false);
+      return;
+    }
     syncPullSettings()
       .then(async (remote) => {
         if (remote) await db.settings.put(remote);
@@ -271,6 +281,11 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
     setCryptoKey(result.masterKey);
     saveSession(password);
     setPendingRecoveryKey(result.recoveryKey);
+    // Advance sync cursor so any orphaned pre-setup entities are ignored
+    try {
+      localStorage.setItem(LAST_SYNC_KEY, String(now));
+      localStorage.removeItem(RESET_PENDING_KEY);
+    } catch {}
     await syncPushSettings();
     startAutoSync();
   }, []);
