@@ -8,6 +8,8 @@ import { useCrypto } from "@/components/providers/crypto-provider";
 import { getOrderBetween } from "@/lib/fractional-index";
 import type { Block, BlockType, BlockMeta } from "@/lib/types";
 import { syncPushEntity } from "@/lib/sync/engine";
+import { looksLikeCiphertext } from "@/lib/crypto";
+import { tr } from "@/lib/i18n";
 
 export interface DecryptedBlock extends Block {
   decryptedContent: string;
@@ -35,10 +37,11 @@ export function useBlocks(noteId: string) {
           let decryptedContent = "";
           try {
             if (block.content) {
-              decryptedContent = await decryptText(block.content);
+              const text = await decryptText(block.content);
+              decryptedContent = looksLikeCiphertext(text) ? tr("lock.decryptFail") : text;
             }
           } catch {
-            decryptedContent = "(복호화 실패)";
+            decryptedContent = tr("lock.decryptFail");
           }
           return { ...block, decryptedContent } as DecryptedBlock;
         })

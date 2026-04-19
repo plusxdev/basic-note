@@ -16,10 +16,11 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
+import { GripVertical, Plus } from "lucide-react";
 import { useBlocks, type DecryptedBlock } from "@/hooks/use-blocks";
 import { BlockRenderer } from "./block-renderer";
 import { SlashCommandMenu } from "./slash-command-menu";
+import { MobileBlockMenu } from "./mobile-block-menu";
 import { MAX_INDENT } from "@/lib/constants";
 import type { BlockType, BlockMeta } from "@/lib/types";
 
@@ -100,6 +101,7 @@ export function BlockEditor({ noteId }: BlockEditorProps) {
   const { blocks, createBlock, updateBlock, deleteBlock, reorderBlock } =
     useBlocks(noteId);
   const [focusedIndex, setFocusedIndex] = useState(0);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [slashMenu, setSlashMenu] = useState<{
     open: boolean;
     position: { top: number; left: number };
@@ -328,6 +330,24 @@ export function BlockEditor({ noteId }: BlockEditorProps) {
     [blocks, slashMenu, updateBlock, focusBlock]
   );
 
+  const handleMobileBlockSelect = useCallback(
+    async (type: BlockType) => {
+      const anchor = blocks[focusedIndex] ?? blocks[blocks.length - 1];
+      const meta: BlockMeta =
+        type === "heading"
+          ? { level: 1 }
+          : type === "todo"
+            ? { checked: false }
+            : {};
+      const newId = await createBlock(anchor?.id ?? null, type, "", meta);
+      if (newId) {
+        const newIdx = Math.min(blocks.length, focusedIndex + 1);
+        focusBlock(newIdx);
+      }
+    },
+    [blocks, focusedIndex, createBlock, focusBlock]
+  );
+
   const handleSlashClose = useCallback(() => {
     setSlashMenu({ open: false, position: { top: 0, left: 0 }, blockIndex: -1 });
     // "/" stays in the block as normal text — user wanted to type "/"
@@ -420,6 +440,21 @@ export function BlockEditor({ noteId }: BlockEditorProps) {
         onSelect={handleSlashSelect}
         onClose={handleSlashClose}
       />
+
+      <MobileBlockMenu
+        open={mobileMenuOpen}
+        onOpenChange={setMobileMenuOpen}
+        onSelect={handleMobileBlockSelect}
+      />
+
+      <button
+        type="button"
+        aria-label="Add block"
+        onClick={() => setMobileMenuOpen(true)}
+        className="md:hidden fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-black/30 active:scale-95 transition-transform"
+      >
+        <Plus className="h-5 w-5" />
+      </button>
     </>
   );
 }

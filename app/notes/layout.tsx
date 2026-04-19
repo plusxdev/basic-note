@@ -56,7 +56,7 @@ export default function NotesLayout({
               })}
             </nav>
           </header>
-          <main className="flex-1 overflow-auto px-6 pb-6 pt-[10px]">
+          <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 pb-6 pt-[10px]">
             {children}
           </main>
         </SidebarInset>

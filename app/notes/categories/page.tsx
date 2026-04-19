@@ -73,7 +73,7 @@ function CategoryBranch({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
+                variant="destructive"
                 onClick={() => onDeleteCategory(node.id, node.name)}
               >
                 <Trash2 className="h-4 w-4" />

@@ -144,6 +144,18 @@ const ko = {
   "settings.slashCommands": "슬래시 명령",
   "settings.language": "언어",
   "settings.languageDesc": "UI 표시 언어를 변경합니다",
+  "settings.danger": "위험 구역",
+  "settings.reset": "데이터 초기화",
+  "settings.resetDesc": "모든 노트, 카테고리, 설정을 영구 삭제하고 앱을 초기 상태로 되돌립니다. 되돌릴 수 없습니다.",
+  "settings.resetButton": "초기화",
+  "settings.resetConfirm1": "모든 로컬 데이터와 클라우드 데이터가 삭제됩니다. 계속하시겠습니까?",
+  "settings.resetFinal": "마지막 확인",
+  "settings.resetConfirm2": "확인을 위해 아래에 다음 문구를 그대로 입력하세요:",
+  "settings.resetTypePrompt": "초기화",
+  "settings.resetting": "초기화 중…",
+  "settings.resetDone": "초기화 완료",
+  "settings.resetError": "초기화 중 오류가 발생했습니다",
+  "common.next": "다음",
   "settings.footer": "basic note — AES-256-GCM",
 
   // ── Timeout Options ────────────────────────────────
@@ -195,6 +207,8 @@ const ko = {
   "placeholder.code": "코드를 입력하세요",
   "placeholder.title": "제목 없음",
   "placeholder.searchBlock": "블록 타입 검색...",
+  "block.addTitle": "블록 추가",
+  "block.noResult": "결과 없음",
 };
 
 const en: typeof ko = {
@@ -341,6 +355,18 @@ const en: typeof ko = {
   "settings.slashCommands": "Slash Commands",
   "settings.language": "Language",
   "settings.languageDesc": "Change UI display language",
+  "settings.danger": "Danger Zone",
+  "settings.reset": "Reset all data",
+  "settings.resetDesc": "Permanently delete all notes, categories, and settings and reset the app. This cannot be undone.",
+  "settings.resetButton": "Reset",
+  "settings.resetConfirm1": "All local and cloud data will be deleted. Continue?",
+  "settings.resetFinal": "Final confirmation",
+  "settings.resetConfirm2": "Type the following phrase exactly to confirm:",
+  "settings.resetTypePrompt": "RESET",
+  "settings.resetting": "Resetting…",
+  "settings.resetDone": "Reset complete",
+  "settings.resetError": "Failed to reset",
+  "common.next": "Next",
   "settings.footer": "basic note — AES-256-GCM",
 
   // ── Timeout Options ────────────────────────────────
@@ -392,6 +418,8 @@ const en: typeof ko = {
   "placeholder.code": "Write code here",
   "placeholder.title": "Untitled",
   "placeholder.searchBlock": "Search block type...",
+  "block.addTitle": "Add block",
+  "block.noResult": "No result",
 };
 
 export type TranslationKey = keyof typeof ko;
@@ -402,6 +430,11 @@ const LANG_KEY = "bn_language";
 export function getSavedLanguage(): Language {
   if (typeof window === "undefined") return "ko";
   return (localStorage.getItem(LANG_KEY) as Language) || "ko";
+}
+
+/** Translate using the currently-saved language. Use in non-React contexts (hooks/effects without the provider). */
+export function tr(key: TranslationKey): string {
+  return translations[getSavedLanguage()][key];
 }
 
 export function saveLanguage(lang: Language) {

@@ -136,9 +136,16 @@
     @apply font-sans;
   }
 
-  /* Sidebar: custom width */
+  /* Sidebar: custom width + bounded height for mobile scroll */
   [data-slot="sidebar-wrapper"] {
     --sidebar-width: 14rem;
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+  [data-slot="sidebar-inset"] {
+    min-height: 0;
+    min-width: 0;
   }
 
   /* Sidebar: remove right border */

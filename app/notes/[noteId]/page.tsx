@@ -7,6 +7,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { useCrypto } from "@/components/providers/crypto-provider";
 import { useNotes } from "@/hooks/use-notes";
+import { looksLikeCiphertext } from "@/lib/crypto";
 import { BlockEditor } from "@/components/editor/block-editor";
 import { NoteTitle } from "@/components/editor/note-title";
 import { Button } from "@minnjii/dx-kit/ui/button";
@@ -59,7 +60,9 @@ export default function NoteEditorPage({
   // Decrypt title
   useEffect(() => {
     if (!note) return;
-    decryptText(note.title).then(setTitle).catch(() => setTitle(t("lock.decryptFail")));
+    decryptText(note.title)
+      .then((text) => setTitle(looksLikeCiphertext(text) ? t("lock.decryptFail") : text))
+      .catch(() => setTitle(t("lock.decryptFail")));
   }, [note, decryptText, t]);
 
   const handleTitleChange = useCallback(
@@ -167,7 +170,7 @@ export default function NoteEditorPage({
               <AlertDialogTrigger asChild>
                 <DropdownMenuItem
                   onSelect={(e) => e.preventDefault()}
-                  className="text-destructive focus:text-destructive"
+                  variant="destructive"
                 >
                   <Trash2 className="h-4 w-4" />
                   {t("editor.delete")}

@@ -85,7 +85,7 @@ export function NoteList({
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
+                  variant="destructive"
                   onClick={() => setShowFirstConfirm(true)}
                 >
                   <Trash2 className="h-4 w-4" />

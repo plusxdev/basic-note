@@ -8,6 +8,8 @@ import { useCrypto } from "@/components/providers/crypto-provider";
 import { getOrderBetween } from "@/lib/fractional-index";
 import type { Note, Block } from "@/lib/types";
 import { syncPushEntity } from "@/lib/sync/engine";
+import { looksLikeCiphertext } from "@/lib/crypto";
+import { tr } from "@/lib/i18n";
 
 export interface DecryptedNote extends Note {
   /** Decrypted title */
@@ -44,9 +46,10 @@ export function useNotes(categoryId?: string | null) {
           let decryptedTitle = "";
           let preview = "";
           try {
-            decryptedTitle = await decryptText(note.title);
+            const title = await decryptText(note.title);
+            decryptedTitle = looksLikeCiphertext(title) ? tr("lock.decryptFail") : title;
           } catch {
-            decryptedTitle = "(복호화 실패)";
+            decryptedTitle = tr("lock.decryptFail");
           }
 
           // Get first text block for preview
@@ -57,7 +60,8 @@ export function useNotes(categoryId?: string | null) {
               .limit(1)
               .toArray();
             if (blocks.length > 0 && blocks[0].content) {
-              preview = await decryptText(blocks[0].content);
+              const text = await decryptText(blocks[0].content);
+              preview = looksLikeCiphertext(text) ? "" : text;
               if (preview.length > 80) preview = preview.slice(0, 80) + "…";
             }
           } catch {

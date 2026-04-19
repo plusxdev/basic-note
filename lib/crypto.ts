@@ -68,6 +68,16 @@ export async function decrypt(
   return decoder.decode(plaintext);
 }
 
+/**
+ * Heuristic: detect if a decrypted string is actually a ciphertext leak
+ * (e.g., from the pre-fix migration that double-encrypted on decrypt failure).
+ * Our ciphertexts are base64 of iv(12)+data+tag(16) → length >= 40, only base64 chars.
+ */
+export function looksLikeCiphertext(s: string): boolean {
+  if (s.length < 40 || s.length % 4 !== 0) return false;
+  return /^[A-Za-z0-9+/]+=*$/.test(s);
+}
+
 // ─── Master Key ─────────────────────────────────────────────
 
 export async function generateMasterKey(): Promise<CryptoKey> {

@@ -13,6 +13,8 @@ import {
   Check,
   Eye,
   EyeOff,
+  AlertTriangle,
+  Trash2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@minnjii/dx-kit/ui/card";
 import { Button } from "@minnjii/dx-kit/ui/button";
@@ -32,6 +34,17 @@ import { useLanguage } from "@/components/providers/language-provider";
 import type { Language } from "@/lib/i18n";
 import { db } from "@/lib/db";
 import type { Category, Note, Block } from "@/lib/types";
+import { resetEverything } from "@/lib/reset";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@minnjii/dx-kit/ui/alert-dialog";
 
 // ─── Export / Import Types ───────────────────────────────────
 interface ExportData {
@@ -101,6 +114,12 @@ export default function SettingsPage() {
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [recoveryCopied, setRecoveryCopied] = useState(false);
+
+  // ── Reset State ────────────────────────────────────────────
+  const [showReset1, setShowReset1] = useState(false);
+  const [showReset2, setShowReset2] = useState(false);
+  const [resetInput, setResetInput] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   // ── Lock Timeout ─────────────────────────────────────────
   const handleTimeoutChange = useCallback(
@@ -176,6 +195,18 @@ export default function SettingsPage() {
     toast.success(t("settings.recoveryCopied"));
     setTimeout(() => setRecoveryCopied(false), 2000);
   }, [recoveryKey, t]);
+
+  // ── Reset ───────────────────────────────────────────────
+  const handleReset = useCallback(async () => {
+    setResetting(true);
+    try {
+      await resetEverything();
+    } catch (e) {
+      console.error("[reset]", e);
+      toast.error(t("settings.resetError"));
+      setResetting(false);
+    }
+  }, [t]);
 
   // ── Export ───────────────────────────────────────────────
   const handleExport = useCallback(async () => {
@@ -565,6 +596,98 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Danger Zone ───────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base text-destructive">
+            <AlertTriangle className="h-4 w-4" />
+            {t("settings.danger")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between gap-4">
+            <div className="grid gap-1">
+              <p className="text-sm font-medium">{t("settings.reset")}</p>
+              <p className="text-sm text-muted-foreground">
+                {t("settings.resetDesc")}
+              </p>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setShowReset1(true)}
+              disabled={resetting}
+            >
+              <Trash2 className="h-4 w-4" />
+              {t("settings.resetButton")}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Reset: step 1 */}
+      <AlertDialog open={showReset1} onOpenChange={setShowReset1}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("settings.reset")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("settings.resetConfirm1")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                setShowReset1(false);
+                setResetInput("");
+                setShowReset2(true);
+              }}
+            >
+              {t("common.next")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reset: step 2 — type-to-confirm */}
+      <AlertDialog open={showReset2} onOpenChange={(o) => !resetting && setShowReset2(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("settings.resetFinal")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("settings.resetConfirm2")}{" "}
+              <code className="font-mono font-semibold">
+                {t("settings.resetTypePrompt")}
+              </code>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={resetInput}
+            onChange={(e) => setResetInput(e.target.value)}
+            placeholder={t("settings.resetTypePrompt")}
+            autoComplete="off"
+            autoFocus
+            disabled={resetting}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetting}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={
+                resetting ||
+                resetInput.trim() !== t("settings.resetTypePrompt")
+              }
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleReset}
+            >
+              {resetting ? t("settings.resetting") : t("common.delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Info ──────────────────────────────────────── */}
       <div className="text-center text-xs text-muted-foreground pb-6">

@@ -100,65 +100,54 @@ async function migrateData(
   const notes = await db.notes.toArray();
   const blocks = await db.blocks.toArray();
 
-  // Decrypt all with old key
-  const plainCats = await Promise.all(
-    categories.map(async (c) => {
-      try {
-        return { ...c, name: c.name ? await decrypt(oldKey, c.name) : "" };
-      } catch {
-        return c;
-      }
-    })
-  );
-  const plainNotes = await Promise.all(
-    notes.map(async (n) => {
-      try {
-        return { ...n, title: n.title ? await decrypt(oldKey, n.title) : "" };
-      } catch {
-        return n;
-      }
-    })
-  );
-  const plainBlocks = await Promise.all(
-    blocks.map(async (b) => {
-      try {
-        return { ...b, content: b.content ? await decrypt(oldKey, b.content) : "" };
-      } catch {
-        return b;
-      }
-    })
-  );
+  // Decrypt with old key; skip items that fail so we don't re-encrypt ciphertext
+  const encCats: typeof categories = [];
+  for (const c of categories) {
+    if (!c.name) {
+      encCats.push({ ...c, name: "" });
+      continue;
+    }
+    try {
+      const plain = await decrypt(oldKey, c.name);
+      encCats.push({ ...c, name: await encrypt(masterKey, plain) });
+    } catch {
+      // Leave as-is; surfaces as "(복호화 실패)" in UI instead of corrupting further
+    }
+  }
 
-  // Re-encrypt with master key
-  const encCats = await Promise.all(
-    plainCats.map(async (c) => ({
-      ...c,
-      name: c.name ? await encrypt(masterKey, c.name) : "",
-    }))
-  );
-  const encNotes = await Promise.all(
-    plainNotes.map(async (n) => ({
-      ...n,
-      title: n.title ? await encrypt(masterKey, n.title) : "",
-    }))
-  );
-  const encBlocks = await Promise.all(
-    plainBlocks.map(async (b) => ({
-      ...b,
-      content: b.content ? await encrypt(masterKey, b.content) : "",
-    }))
-  );
+  const encNotes: typeof notes = [];
+  for (const n of notes) {
+    if (!n.title) {
+      encNotes.push({ ...n, title: "" });
+      continue;
+    }
+    try {
+      const plain = await decrypt(oldKey, n.title);
+      encNotes.push({ ...n, title: await encrypt(masterKey, plain) });
+    } catch {}
+  }
 
-  // Write to DB in transaction
+  const encBlocks: typeof blocks = [];
+  for (const b of blocks) {
+    if (!b.content) {
+      encBlocks.push({ ...b, content: "" });
+      continue;
+    }
+    try {
+      const plain = await decrypt(oldKey, b.content);
+      encBlocks.push({ ...b, content: await encrypt(masterKey, plain) });
+    } catch {}
+  }
+
   await db.transaction(
     "rw",
     db.categories,
     db.notes,
     db.blocks,
     async () => {
-      await db.categories.bulkPut(encCats);
-      await db.notes.bulkPut(encNotes);
-      await db.blocks.bulkPut(encBlocks);
+      if (encCats.length) await db.categories.bulkPut(encCats);
+      if (encNotes.length) await db.notes.bulkPut(encNotes);
+      if (encBlocks.length) await db.blocks.bulkPut(encBlocks);
     }
   );
 }

@@ -8,6 +8,8 @@ import { useCrypto } from "@/components/providers/crypto-provider";
 import { getOrderBetween } from "@/lib/fractional-index";
 import type { Category, CategoryTreeNode } from "@/lib/types";
 import { syncPushEntity } from "@/lib/sync/engine";
+import { looksLikeCiphertext } from "@/lib/crypto";
+import { tr } from "@/lib/i18n";
 
 function buildTree(
   categories: Category[],
@@ -52,9 +54,12 @@ export function useCategories() {
         rawCategories.map(async (cat) => {
           try {
             const name = await decryptText(cat.name);
+            if (looksLikeCiphertext(name)) {
+              return { ...cat, name: tr("lock.decryptFail") };
+            }
             return { ...cat, name };
           } catch {
-            return { ...cat, name: "(복호화 실패)" };
+            return { ...cat, name: tr("lock.decryptFail") };
           }
         })
       );
