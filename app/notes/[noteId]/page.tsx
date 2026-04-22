@@ -216,7 +216,7 @@ export default function NoteEditorPage({
               size="sm"
               className="shrink-0 text-muted-foreground"
             >
-              <CalendarIcon className="mr-1.5 h-4 w-4" />
+              <CalendarIcon className="h-4 w-4" />
               {format(note.createdAt, "yyyy.MM.dd")}
             </Button>
           </PopoverTrigger>
