@@ -49,7 +49,6 @@ export function TextBlock({
       onInput={handleInput}
       onKeyDown={onKeyDown}
       onFocus={onFocus}
-      data-placeholder="텍스트를 입력하세요..."
     />
   );
 }
