@@ -313,10 +313,10 @@ export function BlockEditor({ noteId }: BlockEditorProps) {
         return;
       }
 
-      // Backspace at caret position 0 of a non-empty block → move caret to
-      // the end of the previous block. No merge, no delete — just navigate.
-      // Subsequent backspaces then delete chars from the previous block
-      // naturally via native contentEditable behavior.
+      // Backspace at caret position 0 of a non-empty block → merge this
+      // block's content into the end of the previous block.
+      // DOM/focus/caret are all done synchronously within this keydown for
+      // instant feel; DB writes run in the background.
       if (e.key === "Backspace" && index > 0 && liveContent !== "") {
         if (e.nativeEvent.isComposing || e.keyCode === 229) return;
         const sel = window.getSelection();
@@ -324,7 +324,42 @@ export function BlockEditor({ noteId }: BlockEditorProps) {
         const caret = el ? getCaretOffset(el) : -1;
         if (caret === 0 && collapsed) {
           e.preventDefault();
-          focusBlock(index - 1, true);
+          const prev = blocks[index - 1];
+          if (!prev) return;
+          const prevEl = blockRefs.current.get(index - 1);
+          if (!prevEl) return;
+
+          const prevContent = prevEl.textContent ?? prev.decryptedContent;
+          const joinPos = prevContent.length;
+          const merged = prevContent + liveContent;
+
+          for (const bid of [block.id, prev.id]) {
+            const pending = saveTimers.current.get(bid);
+            if (pending) {
+              clearTimeout(pending);
+              saveTimers.current.delete(bid);
+            }
+          }
+
+          // Synchronous: update prev DOM, move focus, place caret at join.
+          prevEl.textContent = merged;
+          prevEl.focus();
+          try {
+            const range = document.createRange();
+            const textNode = prevEl.firstChild ?? prevEl;
+            const maxLen = (textNode.textContent ?? "").length;
+            range.setStart(textNode, Math.min(joinPos, maxLen));
+            range.collapse(true);
+            const selection = window.getSelection();
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+          } catch {}
+
+          setFocusedIndex(index - 1);
+
+          // Fire-and-forget DB writes; UI already reflects the merged state.
+          updateBlock(prev.id, { content: merged });
+          deleteBlock(block.id);
           return;
         }
       }
