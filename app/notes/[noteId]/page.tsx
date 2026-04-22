@@ -100,7 +100,7 @@ export default function NoteEditorPage({
           variant="ghost"
           size="sm"
           className="-ml-[15px] gap-0.5"
-          onClick={() => router.push("/notes")}
+          onClick={() => router.back()}
         >
           <ArrowLeft className="h-4 w-4" />
           {t("editor.back")}
