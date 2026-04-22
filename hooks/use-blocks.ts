@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { nanoid } from "nanoid";
 import { db } from "@/lib/db";
@@ -18,6 +18,15 @@ export interface DecryptedBlock extends Block {
 
 export function useBlocks(noteId: string) {
   const { encryptText, decryptText, isUnlocked } = useCrypto();
+  // Cache decrypted plaintext by ciphertext. Without this, every Enter /
+  // edit causes useLiveQuery to re-decrypt every block in the note, which
+  // for even moderately sized notes blocks the UI for 50-200ms.
+  const decryptCacheRef = useRef<Map<string, string>>(new Map());
+
+  // Clear cache on lock so a different cryptoKey can't read stale plaintext.
+  useEffect(() => {
+    if (!isUnlocked) decryptCacheRef.current.clear();
+  }, [isUnlocked]);
 
   const rawBlocks = useLiveQuery(
     () =>
@@ -33,13 +42,22 @@ export function useBlocks(noteId: string) {
   const blocks = useLiveQuery(
     async () => {
       if (!isUnlocked || !rawBlocks || rawBlocks.length === 0) return [];
+      const cache = decryptCacheRef.current;
       const decrypted = await Promise.all(
         rawBlocks.map(async (block) => {
           let decryptedContent = "";
           try {
             if (block.content) {
-              const text = await decryptText(block.content);
-              decryptedContent = looksLikeCiphertext(text) ? tr("lock.decryptFail") : text;
+              const cached = cache.get(block.content);
+              if (cached !== undefined) {
+                decryptedContent = cached;
+              } else {
+                const text = await decryptText(block.content);
+                decryptedContent = looksLikeCiphertext(text)
+                  ? tr("lock.decryptFail")
+                  : text;
+                cache.set(block.content, decryptedContent);
+              }
             }
           } catch (e) {
             // Transient lock (cryptoKey briefly null): leave content empty
