@@ -33,9 +33,17 @@ export function useBlocks(noteId: string) {
   // real ciphertext block shows up in rawBlocks.
   const [optimisticBlocks, setOptimisticBlocks] = useState<DecryptedBlock[]>([]);
 
+  // Per-block optimistic plaintext override. updateBlock with new content
+  // records it here so React state reflects the new plaintext without waiting
+  // for encrypt + Dexie roundtrip — prevents visible flicker during Enter / merge.
+  const [contentOverrides, setContentOverrides] = useState<Map<string, string>>(
+    new Map()
+  );
+
   // Reset optimistic state when switching notes so stale items don't leak.
   useEffect(() => {
     setOptimisticBlocks([]);
+    setContentOverrides(new Map());
   }, [noteId]);
 
   const rawBlocks = useLiveQuery(
@@ -56,6 +64,29 @@ export function useBlocks(noteId: string) {
     setOptimisticBlocks((prev) => {
       const kept = prev.filter((b) => !realIds.has(b.id));
       return kept.length === prev.length ? prev : kept;
+    });
+  }, [rawBlocks]);
+
+  // Drop content overrides once the real block's decrypted plaintext matches
+  // what we wrote — i.e., our updateBlock has landed. Uses decrypt cache which
+  // updateBlock already pre-populates.
+  useEffect(() => {
+    if (!rawBlocks || rawBlocks.length === 0) return;
+    const cache = decryptCacheRef.current;
+    setContentOverrides((prev) => {
+      if (prev.size === 0) return prev;
+      let changed = false;
+      const next = new Map(prev);
+      for (const [id, expected] of prev) {
+        const real = rawBlocks.find((b) => b.id === id);
+        if (!real) continue;
+        const realPlain = real.content ? cache.get(real.content) : "";
+        if (realPlain === expected) {
+          next.delete(id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
     });
   }, [rawBlocks]);
 
@@ -95,14 +126,22 @@ export function useBlocks(noteId: string) {
 
   const blocks = useMemo<DecryptedBlock[]>(() => {
     const real = decryptedReal ?? [];
-    if (optimisticBlocks.length === 0) return real;
-    const realIds = new Set(real.map((b) => b.id));
+    const withOverride = contentOverrides.size === 0
+      ? real
+      : real.map((b) => {
+          const override = contentOverrides.get(b.id);
+          return override !== undefined
+            ? { ...b, decryptedContent: override }
+            : b;
+        });
+    if (optimisticBlocks.length === 0) return withOverride;
+    const realIds = new Set(withOverride.map((b) => b.id));
     const pending = optimisticBlocks.filter((b) => !realIds.has(b.id));
-    if (pending.length === 0) return real;
-    return [...real, ...pending].sort((a, b) =>
+    if (pending.length === 0) return withOverride;
+    return [...withOverride, ...pending].sort((a, b) =>
       a.sortOrder.localeCompare(b.sortOrder)
     );
-  }, [decryptedReal, optimisticBlocks]);
+  }, [decryptedReal, optimisticBlocks, contentOverrides]);
 
   const createBlock = useCallback(
     (
@@ -189,6 +228,18 @@ export function useBlocks(noteId: string) {
     ) => {
       if (!isUnlocked) return;
 
+      // Optimistic: expose new plaintext to React state immediately so the
+      // block component renders with the updated content, without waiting for
+      // encrypt + Dexie roundtrip. Prevents Enter / merge flicker.
+      if (updates.content !== undefined) {
+        const plain = updates.content;
+        setContentOverrides((prev) => {
+          const next = new Map(prev);
+          next.set(blockId, plain);
+          return next;
+        });
+      }
+
       const patch: Partial<Block> = { updatedAt: Date.now() };
       if (updates.content !== undefined) {
         patch.content = await encryptText(updates.content);
@@ -213,6 +264,12 @@ export function useBlocks(noteId: string) {
       // If this was still in optimistic state (created so fast it hadn't hit
       // the DB yet), drop it locally too.
       setOptimisticBlocks((prev) => prev.filter((b) => b.id !== blockId));
+      setContentOverrides((prev) => {
+        if (!prev.has(blockId)) return prev;
+        const next = new Map(prev);
+        next.delete(blockId);
+        return next;
+      });
       const now = Date.now();
       await db.blocks.update(blockId, { deletedAt: now, updatedAt: now });
       await db.notes.update(noteId, { updatedAt: now });
