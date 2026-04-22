@@ -1,9 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { formatDistanceToNow } from "date-fns";
-import { ko } from "date-fns/locale";
-import { enUS } from "date-fns/locale";
+import { format } from "date-fns";
 import {
   Card,
   CardHeader,
@@ -11,7 +9,6 @@ import {
   CardDescription,
   CardAction,
 } from "@minnjii/dx-kit/ui/card";
-import { Badge } from "@minnjii/dx-kit/ui/badge";
 import { Button } from "@minnjii/dx-kit/ui/button";
 import {
   DropdownMenu,
@@ -19,9 +16,31 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "@minnjii/dx-kit/ui/dropdown-menu";
-import { Pin, FolderInput, Folder, Inbox, Check } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@minnjii/dx-kit/ui/alert-dialog";
+import {
+  Pin,
+  PinOff,
+  MoreHorizontal,
+  FolderInput,
+  Folder,
+  Inbox,
+  Check,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useLanguage } from "@/components/providers/language-provider";
 import type { DecryptedNote } from "@/hooks/use-notes";
@@ -31,20 +50,29 @@ interface NoteListItemProps {
   note: DecryptedNote;
   categories?: Category[];
   onMoveToCategory?: (noteId: string, categoryId: string | null) => void;
+  onTogglePin?: (noteId: string) => void;
+  onDelete?: (noteId: string) => Promise<void>;
 }
 
 export function NoteListItem({
   note,
   categories,
   onMoveToCategory,
+  onTogglePin,
+  onDelete,
 }: NoteListItemProps) {
   const router = useRouter();
-  const { t, language } = useLanguage();
-  const dateLocale = language === "ko" ? ko : enUS;
-  const timeAgo = formatDistanceToNow(note.updatedAt, {
-    addSuffix: true,
-    locale: dateLocale,
-  });
+  const { t } = useLanguage();
+
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    await onDelete(note.id);
+    toast.success(t("editor.deleted"));
+  };
+
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
+
+  const hasMenu = onTogglePin || onMoveToCategory || onDelete;
 
   return (
     <Card
@@ -65,57 +93,123 @@ export function NoteListItem({
         </CardDescription>
         <CardAction>
           <div className="flex items-center gap-1.5">
-            <Badge variant="secondary" className="text-xs shrink-0">
-              {timeAgo}
-            </Badge>
-            {onMoveToCategory && categories && categories.length > 0 && (
+            <span className="text-xs text-muted-foreground shrink-0">
+              {format(note.createdAt, "yyyy.MM.dd")}
+            </span>
+            {hasMenu && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
                     size="xs"
                     className="h-7 w-7 p-0 text-muted-foreground"
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={stop}
                   >
-                    <FolderInput className="h-3.5 w-3.5" />
+                    <MoreHorizontal className="h-3.5 w-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   align="end"
                   className="min-w-[166px]"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={stop}
                 >
-                  <DropdownMenuLabel>{t("editor.categoryMove")}</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => {
-                      onMoveToCategory(note.id, null);
-                      toast.success(t("editor.movedUncategorized"));
-                    }}
-                    disabled={!note.categoryId}
-                  >
-                    <Inbox className="h-4 w-4" />
-                    {t("editor.uncategorized")}
-                    {!note.categoryId && (
-                      <Check className="ml-auto h-3.5 w-3.5" />
-                    )}
-                  </DropdownMenuItem>
-                  {categories.map((cat) => (
+                  {onTogglePin && (
                     <DropdownMenuItem
-                      key={cat.id}
                       onClick={() => {
-                        onMoveToCategory(note.id, cat.id);
-                        toast.success(`"${cat.name}" ${t("editor.movedTo")}`);
+                        onTogglePin(note.id);
+                        toast.success(
+                          note.pinned ? t("editor.unpinned") : t("editor.pinned")
+                        );
                       }}
-                      disabled={note.categoryId === cat.id}
                     >
-                      <Folder className="h-4 w-4" />
-                      {cat.name}
-                      {note.categoryId === cat.id && (
-                        <Check className="ml-auto h-3.5 w-3.5" />
+                      {note.pinned ? (
+                        <>
+                          <PinOff className="h-4 w-4" />
+                          {t("editor.unpin")}
+                        </>
+                      ) : (
+                        <>
+                          <Pin className="h-4 w-4" />
+                          {t("editor.pin")}
+                        </>
                       )}
                     </DropdownMenuItem>
-                  ))}
+                  )}
+                  {onMoveToCategory && categories && categories.length > 0 && (
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <FolderInput className="h-4 w-4" />
+                        {t("editor.category")}
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            onMoveToCategory(note.id, null);
+                            toast.success(t("editor.movedUncategorized"));
+                          }}
+                          disabled={!note.categoryId}
+                        >
+                          <Inbox className="h-4 w-4" />
+                          {t("editor.uncategorized")}
+                          {!note.categoryId && (
+                            <Check className="ml-auto h-3.5 w-3.5" />
+                          )}
+                        </DropdownMenuItem>
+                        {categories.map((cat) => (
+                          <DropdownMenuItem
+                            key={cat.id}
+                            onClick={() => {
+                              onMoveToCategory(note.id, cat.id);
+                              toast.success(
+                                `"${cat.name}" ${t("editor.movedTo")}`
+                              );
+                            }}
+                            disabled={note.categoryId === cat.id}
+                          >
+                            <Folder className="h-4 w-4" />
+                            {cat.name}
+                            {note.categoryId === cat.id && (
+                              <Check className="ml-auto h-3.5 w-3.5" />
+                            )}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  )}
+                  {onDelete && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <DropdownMenuItem
+                            onSelect={(e) => e.preventDefault()}
+                            variant="destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            {t("editor.delete")}
+                          </DropdownMenuItem>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent onClick={stop}>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              {t("editor.deleteTitle")}
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              {t("editor.deleteConfirm")}
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>
+                              {t("common.cancel")}
+                            </AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDelete}>
+                              {t("common.delete")}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}

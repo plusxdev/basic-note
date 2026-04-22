@@ -39,7 +39,8 @@ export function NoteList({
 }: NoteListProps) {
   const { t } = useLanguage();
   const displayTitle = title ?? t("nav.allNotes");
-  const { notes, createNote, moveToCategory } = useNotes(categoryId);
+  const { notes, createNote, moveToCategory, togglePin, deleteNote } =
+    useNotes(categoryId);
   const { categories, updateCategory, deleteCategoryWithNotes } = useCategories();
   const router = useRouter();
   const [showFirstConfirm, setShowFirstConfirm] = useState(false);
@@ -167,6 +168,8 @@ export function NoteList({
               note={note}
               categories={categories}
               onMoveToCategory={moveToCategory}
+              onTogglePin={togglePin}
+              onDelete={deleteNote}
             />
           ))}
         </div>
