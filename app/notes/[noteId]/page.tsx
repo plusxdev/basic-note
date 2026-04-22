@@ -15,7 +15,7 @@ import { Button } from "@minnjii/dx-kit/ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "@minnjii/dx-kit/ui/popover";
 import { Calendar } from "@minnjii/dx-kit/ui/calendar";
 import { ko, enUS } from "date-fns/locale";
-import { format, formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -94,7 +94,7 @@ export default function NoteEditorPage({
 
   return (
     <div className="max-w-3xl grid gap-6">
-      {/* Toolbar */}
+      {/* Toolbar: back + more */}
       <div className="flex items-center justify-between">
         <Button
           variant="ghost"
@@ -105,18 +105,6 @@ export default function NoteEditorPage({
           <ArrowLeft className="h-4 w-4" />
           {t("editor.back")}
         </Button>
-      </div>
-
-      {/* Category + More */}
-      <div className="flex items-center justify-between">
-        <span className="-ml-[1px] flex items-center gap-1.5 text-sm text-muted-foreground">
-          {note.categoryId ? (
-            <Folder className="h-4 w-4" />
-          ) : (
-            <Inbox className="h-4 w-4" />
-          )}
-          {categories.find((c) => c.id === note.categoryId)?.name ?? t("editor.uncategorized")}
-        </span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="text-foreground">
@@ -211,20 +199,28 @@ export default function NoteEditorPage({
         </DropdownMenu>
       </div>
 
-      {/* Created + Updated */}
-      <div className="-mt-[23px] flex items-center justify-between text-sm">
+      {/* Category + Created date */}
+      <div className="-mt-3 flex items-center justify-between">
+        <span className="-ml-[1px] flex items-center gap-1.5 text-sm text-muted-foreground">
+          {note.categoryId ? (
+            <Folder className="h-4 w-4" />
+          ) : (
+            <Inbox className="h-4 w-4" />
+          )}
+          {categories.find((c) => c.id === note.categoryId)?.name ?? t("editor.uncategorized")}
+        </span>
         <Popover>
           <PopoverTrigger asChild>
             <Button
               variant="ghost"
               size="sm"
-              className="-ml-[13px] shrink-0 text-muted-foreground"
+              className="shrink-0 text-muted-foreground"
             >
               <CalendarIcon className="mr-1.5 h-4 w-4" />
               {format(note.createdAt, "yyyy.MM.dd")}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
+          <PopoverContent className="w-auto p-0" align="end">
             <Calendar
               mode="single"
               selected={new Date(note.createdAt)}
@@ -235,16 +231,10 @@ export default function NoteEditorPage({
             />
           </PopoverContent>
         </Popover>
-        <span className="shrink-0 text-foreground">
-          {formatDistanceToNow(note.updatedAt, {
-            addSuffix: true,
-            locale: language === "ko" ? ko : enUS,
-          })}
-        </span>
       </div>
 
       {/* Title */}
-      <div className="-mt-[7px]">
+      <div className="-mt-3">
         <NoteTitle
           title={title}
           onTitleChange={handleTitleChange}
