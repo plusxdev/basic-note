@@ -278,7 +278,7 @@ export const PlainEditor = forwardRef<PlainEditorHandle, PlainEditorProps>(
         ref={ref}
         contentEditable
         suppressContentEditableWarning
-        className="rich-editor outline-none leading-relaxed text-foreground min-h-[50vh]"
+        className="rich-editor outline-none leading-relaxed text-foreground min-h-[50vh] break-words overflow-x-hidden"
         onInput={handleInput}
         onKeyDown={handleKeyDown}
       />
