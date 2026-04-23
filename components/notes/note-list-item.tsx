@@ -83,30 +83,34 @@ export function NoteListItem({
       onClick={() => router.push(`/notes/${note.id}`)}
     >
       <CardHeader>
-        <div className="flex items-center gap-2">
+        <div className="flex items-baseline gap-2 min-w-0">
           {note.pinned && (
-            <Pin className="h-3.5 w-3.5 text-primary shrink-0" />
+            <Pin className="h-3.5 w-3.5 text-primary shrink-0 self-center" />
           )}
-          <CardTitle className="text-base truncate">
+          <CardTitle className="text-base truncate flex-1 min-w-0">
             {note.decryptedTitle || t("notes.untitled")}
           </CardTitle>
+          <span className="shrink-0 max-w-[140px] truncate text-sm text-muted-foreground">
+            {folderName}
+          </span>
         </div>
-        <CardDescription className="line-clamp-1">
-          {note.preview || t("notes.noContent")}
-        </CardDescription>
-        <CardAction className="self-stretch">
-          <div className="flex h-full items-stretch gap-1.5">
-            <div className="flex h-full flex-col justify-between items-end text-sm text-muted-foreground">
-              <span className="shrink-0 max-w-[140px] truncate leading-none mt-1.5">{folderName}</span>
-              <span className="shrink-0 leading-none">{format(note.createdAt, "yyyy.MM.dd")}</span>
-            </div>
-            {hasMenu && (
+        <div className="flex items-baseline gap-2 min-w-0">
+          <CardDescription className="line-clamp-1 flex-1 min-w-0">
+            {note.preview || t("notes.noContent")}
+          </CardDescription>
+          <span className="shrink-0 text-sm text-muted-foreground">
+            {format(note.createdAt, "yyyy.MM.dd")}
+          </span>
+        </div>
+        {hasMenu && (
+          <CardAction className="self-center">
+            <div className="flex items-center">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
                     size="xs"
-                    className="h-7 w-7 p-0 text-muted-foreground self-center"
+                    className="h-7 w-7 p-0 text-muted-foreground"
                     onClick={stop}
                   >
                     <MoreHorizontal className="h-3.5 w-3.5" />
@@ -216,9 +220,9 @@ export function NoteListItem({
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
-            )}
-          </div>
-        </CardAction>
+            </div>
+          </CardAction>
+        )}
       </CardHeader>
     </Card>
   );
