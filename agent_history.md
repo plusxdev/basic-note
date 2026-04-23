@@ -1,9 +1,9 @@
-# 🕒 Project Checkpoint (2026-04-24)
+# 🕒 Project Checkpoint (2026-04-24, 2nd session)
 
 ## Current Milestone
-**Phase 10 — 에디터 아키텍처 전환, 크립토 다중탭 방어, 노트 리스트 일관화**
+**Phase 10-F · Phase 1 — realtime 누수 차단 + 레거시 블록 UI 제거 + 일괄 마이그레이션 훅 + Supabase env hotfix**
 
-지난 체크포인트(`3914527` Phase 9) 이후 이번 세션에서 **35 커밋**, 전부 main 푸시 + Vercel 프로덕션 자동 배포 완료. 최신: `ccfd273`.
+직전 체크포인트(`ccfd273` Phase 10) 이후 4 커밋, 전부 main 푸시 + Vercel 프로덕션 배포 완료. 최신: `8937239`.
 
 Production: https://pro03note.vercel.app · Repo: https://github.com/plusxdev/pro-03-note
 
@@ -11,89 +11,67 @@ Production: https://pro03note.vercel.app · Repo: https://github.com/plusxdev/pr
 
 ## Key Achievements
 
-### Phase 10-A · 크립토 다중탭 방어 (보안 크리티컬)
-사용자 재현 보고: "밤사이 자고 일어나면 프로덕션 접속 시 전체 노트가 복호화 실패, 새로고침하면 해결". 원인 추적 결과 **다중 Chrome 탭 간 cryptoKey 동기화 불일치**.
+### 1. Realtime sync 누수 차단 (`bff5af2`)
+Phase 10 checkpoint에서 "열린 pending 1번"으로 기록돼 있던 이슈.
 
-시나리오: 탭 A에서 reset+재setup(새 마스터키 M2)하면, 리셋 전 열려있던 탭 B/C는 메모리에 M1을 그대로 쥐고 있고, IndexedDB는 공유라 M2 settings를 보게 되어 key/data 불일치.
+**문제**: `lib/sync/engine.ts`의 `handleRealtimeChange`가 `LAST_SYNC_KEY` 컷오프를 체크하지 않아, reset 후 pre-reset 암호문이 realtime 이벤트로 재유입될 수 있음.
 
-**구현**
-- `lib/decrypt-diagnostics.ts` 신설 — 다음 실패 시 `bn_decrypt_fail_log` localStorage에 컨텍스트(online, visibility, wrapper fingerprint, ciphertext prefix) 스냅샷 기록.
-- `crypto-provider.tsx`에 `loadedWrapperRef` 추가 — 언래핑 시점의 `encryptedMasterKey`를 보관. settings가 drift하면 자동 `lock()`.
-- `BroadcastChannel("bn_crypto")` 구현:
-  - `lock` / `reset` → 수신 탭 무조건 드롭
-  - `setup` / `unlock` → sender wrapper와 receiver의 `loadedWrapperRef` 비교해 같으면 no-op, 다르면 드롭 (unlock이 다른 탭을 불필요하게 밀어내지 않음)
-- `lib/reset.ts`에도 wipe 전에 `{type:"reset"}` 브로드캐스트 추가
-- idle auto-lock 시 `autoUnlockAttempted.current = false`로 리셋 → 세션 pw 있으면 다음 interaction 시 자동 재언락
-- 모든 훅 catch에서 `"App is locked"` 일시 에러는 빈 문자열 처리 → 끈적한 "(복호화 실패)" 표시 차단
-- 노트 상세 title decrypt에 `isUnlocked` 가드 추가
+**해결**: `row.updated_at <= getLastSyncAt()`이면 스킵. `pullAll`의 `.gt("updated_at", lastSyncAt)` 필터와 대칭. 5줄 추가.
 
-**검증 결과**: 사용자 "배포 이후로 복호화 실패는 없었어" 확인.
+### 2. 레거시 블록 에디터 UI 제거 (Phase 1) (`b338c66`)
+18 파일 삭제, 1865 lines 감소.
 
-메모리: `project_crypto_multitab.md` 기록.
+**삭제**
+- `components/editor/block-editor.tsx`, `block-renderer.tsx`
+- `components/editor/slash-command-menu.tsx`, `mobile-block-menu.tsx`
+- `components/editor/block-types.ts`, `block-type-items.ts`
+- `components/editor/blocks/*.tsx` (8개)
+- `hooks/use-blocks.ts`
+- `lib/constants.ts`의 `BLOCK_TYPE_CONFIG` / `BLOCK_TYPES` / `MAX_INDENT`
+- `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities` 의존성 (+ transitive 4)
 
-### Phase 10-B · 블록 에디터 → PlainEditor 전환 (큰 리팩터)
-**문제**
-- Enter 시 옛 블록 DOM이 stale 상태로 잔존 → 한 프레임 깜빡임
-- dnd-kit `useSortable`이 rawBlocks 변경마다 재평가 → 7-8줄 동시 깜빡임
-- 각 블록이 독립 `contentEditable`이라 **라인 간 네이티브 선택 불가**
+**보존** (Phase 2에서 처리할 데이터 레이어)
+- `Block` 타입, `db.blocks` 테이블
+- `use-notes.ts`의 신규 노트 생성 시 빈 text 블록 추가 + 삭제 시 블록 soft-delete + preview fallback
+- `use-categories.ts`의 카테고리 삭제 시 블록 정리
+- `plain-editor.tsx` 내 마이그레이션 호출 (모듈로 이관됨)
+- `crypto-provider.tsx`의 blocks 재암호화, `reset.ts`의 blocks clear
+- `sync/engine.ts`의 block entity case, `settings/page.tsx`의 export/import blocks 필드
 
-**교체 전 시도** (초반에 기존 구조 유지 시도)
-- `useBlocks`에 `decryptCacheRef` (ciphertext → plaintext) → Enter 지연 절반 감소
-- `contentOverrides` Map state로 updateBlock 결과를 React state에 즉시 반영 → 추가 flicker 제거
-- `prevDecryptedRef`로 블록 객체 reference 보존 → dnd-kit 리렌더 억제
-- `SortableBlock.style.transition`은 `isDragging` 시에만 적용
-- 각 블록에 onBlur 동기화 추가 + `contentRef`로 최신 content 보관
-- Backspace merge를 동기 DOM 조작으로 전환
+### 3. 일괄 블록→content 마이그레이션 훅 (`8faa4aa`)
+Phase 2 선행 조건을 자동화.
 
-**최종 결정** — 사용자 "애플 노트 타겟" 방향 제시 → 구조 자체 교체.
+**신설**: `lib/migrations/blocks-to-content.ts`
+- `plaintextToHtml(text)` / `migrateNoteFromBlocks(noteId, decrypt)` — plain-editor에서 공용화
+- `migrateAllNotesToContent(encrypt, decrypt)` — 일괄 sweep
 
-**PlainEditor (`components/editor/plain-editor.tsx`)**
-- 단일 HTML contentEditable (`contentEditable="true"`, `innerHTML` 저장)
-- **Note.content** 필드 추가 (암호화된 HTML 문자열)
-- 자동 마이그레이션: 기존 블록들을 첫 진입 시 `<h1/2/3>`, `<ul><li>`, `<div>`로 재구성해 `content`에 저장
-- 레거시 plaintext(`• ` prefix 포함) → HTML 자동 변환
-- `forwardRef` + `useImperativeHandle`로 외부 명령:
-  - `execBold`, `execItalic`, `execUnderline`, `execStrikethrough`
-  - `setHeading(1|2|3|null)` — `formatBlock` 래퍼
-  - `toggleBulletAtCaret`, `toggleNumberedAtCaret` — `insertUnorderedList`/`insertOrderedList`
-- 키보드 쇼트컷 Cmd/Ctrl+B/I/U
-- 400ms debounced encrypt + Dexie write + syncPushEntity
+**통합**:
+- `plain-editor.tsx`: 로컬 함수 전부 제거 후 모듈 import
+- `crypto-provider.tsx`: unlock 시점에 백그라운드로 `migrateAllNotesToContent` 호출
 
-**툴바 (노트 상세 상단)**
-- 구성: 텍스트크기(드롭다운: 제목 1/2/3 / 본문) → 블릿 → Bold → Italic → Underline → Strikethrough
-- 레이아웃: 3-컬럼(`absolute left-1/2 -translate-x-1/2`로 중앙). 왼쪽 `← 뒤로`, 오른쪽 `⋯`
+**재실행 가드**: `localStorage("bn_blocks_migrated_v1")` = 완료 timestamp. `failed === 0`일 때만 세팅 → 실패 노트 있으면 다음 unlock에 재시도.
 
-**스타일 (globals.css .rich-editor)**
-- `h1`(1.5rem), `h2`(1.25rem), `h3`(1.1rem), `ul`/`ol`(pl 1.5rem), `li`, `hr`
-- `break-words overflow-x-hidden`으로 긴 단어가 부모 폭 안 넘김
+**검증 결과** (사용자 측):
+- 주 기기 플래그 값 `1776984473906` 확인 → migrated=... failed=0으로 완료
+- 모바일에서 캐시된 구 번들이 문제 일으킴 → 사이트 데이터 삭제 후 정상
 
-### Phase 10-C · 노트 리스트 재구성 + 추상화
-**레이아웃**
-- 리스트 아이템 우측 2줄: 상단 폴더명, 하단 생성일(`yyyy.MM.dd`)
-- 좌우 baseline 자동 정렬: CardAction 대신 각 행을 `flex items-baseline`으로 구성 (title + folder, preview + date)
-- `⋯` 버튼은 CardAction에 남겨두고 `self-center` + `ml-[5px]`
-- 날짜 `-mt-[2px]`, 폰트 `text-sm`(14px)로 좌측 preview와 통일
-- preview는 `note.content` 우선 (HTML → DOMParser로 텍스트 추출), legacy block fallback
+### 4. Supabase env값 trim — WS 무한 재연결 핫픽스 (`8937239`)
+Phase 1 배포 후 프로덕션 console에 WS `failed` 스팸 수초 주기로 반복됨.
 
-**추상화: `components/notes/note-card.tsx`**
-- `NoteCard({ note })`이 `useNotes`/`useCategories`에서 필요한 모든 핸들러 자동 주입
-- 기존 문제: calendar·categories 페이지가 `NoteListItem`에 `onTogglePin`/`onDelete`를 prop drill 안 해서 핀/삭제 동작 안 함
-- 해결: 모든 리스트 사용처(`note-list.tsx`, `calendar/page.tsx`, `categories/page.tsx` × 2) → `<NoteCard note={note} />`로 교체. 프롭 누락 버그 구조적 차단.
+**원인 추적**
+- URL 쿼리: `apikey=eyJhbGci...NMVI%0A&vsn=2.0.0` — JWT 끝에 `%0A`
+- `vercel env pull .env.vercel.prod`로 값 확인 → 양쪽 모두 끝에 `\n`:
+  ```
+  NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJ...NMVI\n"
+  NEXT_PUBLIC_SUPABASE_URL="https://...supabase.co\n"
+  ```
+- Supabase realtime 서버가 개행 포함 토큰/URL에서 WS upgrade를 reject → client reconnect loop
 
-### Phase 10-D · UI 세부 정렬
-- 사이드바 토글을 사이드바 내부 로고 우측으로 이동, 접힘(`collapsible=icon`) 시 토글만 노출
-- 로고 상단(+5px) / 푸터 하단(+8px) 여백 조정
-- 전 영역 아이콘 `h-4 w-4` (16px)로 통일
-- 드롭다운 `min-w-[166px]` (30% 확대)
-- 상단 `/notes/*` 탭 nav `mt-0.5`
-- 노트 상세 헤더 2줄 → 1줄 (카테고리 / 생성일), 아이콘 제거, 간격 미세조정
-- 뒤로가기 `router.push("/notes")` → `router.back()` (원래 페이지로 복귀)
-- 제목-본문 여백 축소: `gap-6`(24px) + `-mt-[18px]` = 실효 6px
+**해결**
+- `lib/supabase.ts`에서 `process.env.NEXT_PUBLIC_SUPABASE_URL!.trim()`, `...ANON_KEY!.trim()` 적용 (defensive)
+- 사용자가 Vercel 대시보드에서 두 env var 재설정 (개행 제거)
 
-### Phase 10-E · 브라우저 제스처 복원
-증상: macOS Safari/Chrome 좌→우 스와이프 뒤로가기가 노트 상세에서 미동작.
-원인: 가로 elastic overscroll이 제스처 가로챔.
-수정: `app/notes/layout.tsx` main에 `overflow-x-hidden overscroll-x-none`, PlainEditor에 `break-words overflow-x-hidden`.
+**보너스 보안**: `.gitignore`가 `.env.vercel.prod`를 커버 안 함. pull 직후 수동 `rm`으로 처리. (추후 `.gitignore`에 `.env.vercel.*` 추가 검토)
 
 ---
 
@@ -101,121 +79,99 @@ Production: https://pro03note.vercel.app · Repo: https://github.com/plusxdev/pr
 
 | 결정 | 이유 |
 |---|---|
-| PlainEditor 단일 contentEditable | 라인 간 선택, 네이티브 Enter/Backspace, 리렌더 성능 — 블록 단위 CE의 구조적 한계 |
-| HTML 저장 (innerHTML) | Bold/Italic/헤딩/리스트 등 네이티브 리치 텍스트 지원 |
-| `document.execCommand` 사용 (deprecated) | Chrome/Safari/Firefox 모두 안정 동작, 사용자 Chrome only |
-| NoteCard 래퍼 | prop drill 누락 버그 재발 차단, 새 리스트 페이지 추가 비용 ↓ |
-| BroadcastChannel wrapper 비교 방식 | paranoid 일괄 락은 UX 거슬림 — 실제 key 변경 시에만 락 |
-| 뒤로가기 `router.back()` | 다양한 진입 경로(전체/카테고리/캘린더/검색) 보존 |
-| Note.content 필드 추가 (block 테이블은 legacy로 유지) | 마이그레이션 롤백 여지 확보 |
+| realtime에도 LAST_SYNC_KEY 컷오프 적용 | `pullAll` 필터와 대칭. reset 후 realtime 이벤트 누수는 구조적 차단이 맞음 |
+| Phase 1/2 분리 — UI만 먼저 | 데이터 레이어 제거는 "모든 노트가 note.content 가진 상태" 보장이 선행. 큰 변경은 쪼개서 롤백 여지 확보 |
+| 일괄 마이그레이션 훅 자동화 | 사용자가 모든 노트를 수동 open하는 비현실적 작업 회피. localStorage 플래그로 멱등성 |
+| `failed === 0`일 때만 flag 세팅 | 일부 실패 시 다음 unlock에 재시도. 성공한 노트는 이미 content 있어 자연스럽게 skip |
+| supabase 클라이언트 level trim | Vercel dashboard 수정과 독립적인 방어 레이어. 다른 플랫폼 이식에도 안전 |
 
 ---
 
-## Pending Tasks (다음 세션 즉시 시작 순)
+## Pending Tasks
 
 ### 높음
-1. **Realtime sync 누수 근본 차단** — `lib/sync/engine.ts`의 `handleRealtimeChange`가 `LAST_SYNC_KEY` 컷오프를 체크하지 않아 옛 암호문 재유입 가능. 이번 세션은 증상(stale cryptoKey) 차단만 했고 원인은 남음. `updated_at <= LAST_SYNC_KEY` row 스킵 로직 추가 필요.
-2. **레거시 블록 시스템 정리** — Block 테이블 / 블록 컴포넌트 7개 / dnd-kit / slash-command-menu / mobile-block-menu 등 미사용 코드 제거. 지금은 마이그레이션만 잔존, 실행은 거의 없음. 모든 노트 마이그레이션 확인 후 삭제.
-3. **자동 불릿 변환 (`- ` → `• `) 재구현** — plaintext-only 시절 구현한 로직이 HTML 전환 후 미검증. `keydown` 시 현재 라인의 Range를 읽어 `insertUnorderedList` 호출하는 방식으로 재작성.
+1. **Phase 10-F Phase 2 — 레거시 블록 데이터 레이어 제거**
+   - 선행 조건: 사용 중인 **모든 기기**에서 `localStorage("bn_blocks_migrated_v1")` timestamp 확인 (현재 주 기기만 확인됨)
+   - 제거 대상:
+     - `lib/types.ts`의 `Block`, `BlockType`, `BlockMeta`
+     - `lib/db.ts`의 `blocks` 스토어 → Dexie 버전 bump 필수
+     - `hooks/use-notes.ts`의 블록 생성/삭제/preview fallback
+     - `hooks/use-categories.ts`의 카테고리 삭제 시 블록 정리
+     - `lib/sync/engine.ts`의 block entity case (push/pull/realtime/syncPush)
+     - `lib/reset.ts`의 `db.blocks.clear()`
+     - `components/providers/crypto-provider.tsx`의 blocks 재암호화 루프
+     - `components/editor/plain-editor.tsx` / `lib/migrations/blocks-to-content.ts`의 마이그레이션 로직 자체
+     - `app/settings/page.tsx`의 export/import blocks 필드 (하위 호환 결정 필요)
 
 ### 중간
-4. **진단 로깅 실전 확인** — `bn_decrypt_fail_log`가 실제 발동할 때의 덤프 확보 (배포 후 증상 소멸로 대기 중).
-5. **다중 노트 선택/일괄 작업** — 애플 노트처럼 여러 노트 동시 삭제/이동. `NoteCard` 경로로 이미 추상화돼 있어 확장하기 쉬움.
-6. **헤딩 현재 상태 표시** — 툴바 드롭다운에서 현재 라인의 heading level 체크 표시.
+2. **진단 로깅 실전 확인** — `bn_decrypt_fail_log`가 실제 발동할 때의 덤프 확보 (배포 후 증상 소멸로 대기 중)
+3. **다중 노트 선택/일괄 작업** — NoteCard 추상화로 확장 쉬움
+4. **헤딩 현재 상태 표시** — 툴바 드롭다운에서 현재 라인 heading level 체크
+5. **`.gitignore`에 `.env.vercel.*` 추가** — 향후 `vercel env pull` 실수 방지
 
 ### 낮음 (UX)
-7. 애플 노트의 하이라이트(형광펜), 링크 삽입, 이미지/첨부. execCommand 기반으로 계속 가면 modernize 어려움 → 규모 커지면 TipTap 등 고려.
-8. 자동 백업 / 버전 히스토리.
+6. 하이라이트(형광펜), 링크 삽입, 이미지/첨부. execCommand 기반 한계 → 규모 커지면 TipTap 고려
+7. 자동 백업 / 버전 히스토리
+
+### 드롭됨
+- ~~자동 불릿 변환 (`- ` → `• `) 재구현~~ — 사용자 "안 해도 될 거 같아"로 드롭
 
 ---
 
 ## Agent Notes
 
 ### Director
-- 세션 작업량: 35 커밋 / 약 5개 카테고리. 모두 production 배포.
-- 커밋 메시지 규칙: 한글, 의도 중심, `Co-Authored-By: Claude Opus 4.7 (1M context)` 푸터.
-- 워크플로: 각 수정 → `npm run build` (타입 체크) → `git commit` → `git push origin main` → `vercel --prod --yes`. 사용자 승인 하에 자동 묶음.
+- 세션 작업량: 4 커밋 / 배포 4회. 모두 안정.
+- 커밋 cadence 유지: 수정 → `npm run build` → `git commit` → `git push` → `vercel --prod --yes`.
+- `#end` 루틴 첫 실행 — 다음 세션은 이 체크포인트로 즉시 이어감.
 
-### Frontend / Backend
-- **에디터 아키텍처 교체는 신중하게**: PlainEditor 전환은 사용자가 명시적으로 "애플 노트 타겟" 방향을 제시한 후 진행. 그 전까진 블록 구조를 최대한 보존하려 여러 패치 시도(캐시/optimistic/ref 안정화).
-- **데이터 손실 방지**: 블록 → HTML 마이그레이션은 첫 진입 시 자동, 결과를 encrypt해 `note.content`에 저장. 블록 자체는 건드리지 않아 롤백 가능.
-- **build → commit → push → deploy** 습관화: 각 커밋이 Vercel에 즉시 반영돼 사용자 테스트 루프가 빠름.
-
-### Designer
-- 사용자 선호: px 단위 미세 조정 요청 많음 (mt-[2px], ml-[5px] 등). 새 기능 추가 시 이 톤 유지.
-- 애플 노트 시각 언어 참고가 뚜렷함.
+### Frontend
+- **큰 변경은 쪼개기**: Phase 10-F를 Phase 1(UI) / Phase 2(데이터 레이어)로 분리한 게 옳았음. Phase 1 직후 WS hotfix 긴급 개입이 있었는데 Phase 2까지 포함했다면 혼란 가중.
+- **Edit 툴 한계**: 긴 old_string은 중간 한 문자만 어긋나도 silent fail. 분할 삭제 + DELETEME 플레이스홀더 우회로 해결. 다음에도 동일 패턴 유용.
 
 ### Security
-- 크립토 다중탭 방어 패턴(`project_crypto_multitab.md`) **절대 되돌리지 말 것**. Paranoid 일괄 락 회귀 시 UX 파괴. Wrapper fingerprint 비교 기반 조건부 락이 정답.
-- `lib/sync/engine.ts`의 realtime 누수는 여전히 열려 있음 → 다음 세션 우선 1번.
-- 진단 로깅 존재 기억: `JSON.parse(localStorage.getItem("bn_decrypt_fail_log"))`.
+- Vercel env var 개행 문제 — **defensive trim이 근본 수정보다 먼저 배포**된 게 정답. 사용자 대시보드 작업은 비동기이고 그동안에도 서비스는 동작해야 함. 패턴으로 기억.
+- realtime WS 무한 재연결은 관측 가능한 증상이라 다행. 조용히 실패하는 경우는 더 위험 — future-proof로 Supabase 클라이언트 주변에 diagnostic 추가 여지.
 
 ### Performance
-- PlainEditor 전환 후 에디터 관련 리렌더/깜빡임은 전부 해소. 노트당 AES-GCM decrypt 1회.
-- 리스트 preview는 `decryptCacheRef`로 재복호화 억제 (`use-notes.ts`).
+- 일괄 마이그레이션은 background(`void`)로 fire-and-forget. UI 블로킹 없음.
+- `isRunning` in-memory guard로 useEffect 의존성 재트리거 방어.
 
 ---
 
-## 주요 커밋 이력 (최근 순)
+## 주요 커밋 이력
 
 ```
-ccfd273 NoteCard 추상화: 리스트 전역에서 pin/delete 일관 지원
-eefece1 노트 리스트 우측 날짜 -mt-px → -mt-[2px]
-9b7c537 노트 리스트 우측 날짜 1px 위로
-a58e04d 좌우 elastic overscroll 제거 (뒤로가기 제스처 복구)
-759a917 노트 리스트 ... 버튼 왼쪽 여백 5px 추가
-e0dc289 노트 리스트 좌우 baseline 자동 정렬 (구조 재배치)
-0f10293 노트 리스트 폴더명 상단 여백 mt-1 → mt-1.5
-f1b6d3a 노트 리스트 우측 폰트 12 → 14로 맞춤
-d612ff5 노트 리스트 폴더명 상단 여백 4px 추가
-1c66b96 노트 리스트 우측 2줄, 좌측 타이틀/설명 라인에 맞춰 정렬
-4357e1a 노트 리스트 우측 2줄 + ... 버튼 중앙정렬
-6823949 제목-본문 간격 다시 절반 축소
-7b69e40 툴바 배치: 중앙 정렬 + 순서 재배열 + 제목 아래 여백 축소
-a559c73 리치 텍스트 편집: 볼드/이탤릭/밑줄/취소선 + 헤딩 + 리스트
-713bf0e 불릿 자동 변환 + 툴바 불릿 토글 버튼
-3d6f0e8 단일 contentEditable 에디터로 전환 (애플 노트 스타일)
-674823a 드래그 중 아닐 땐 dnd-kit transition 비활성
-5e5759d Enter split 블록 잔여 깜빡임 제거
-fd9cf58 Enter 시 위 블록들 flicker 제거
-7cdf7fc updateBlock에 contentOverrides 추가
-b290739 useBlocks optimistic 상태 + 리스트 preview 빈 블록 스킵
-2e4238c useBlocks에 복호화 캐시 추가
-5b8805f 백스페이스 merge 동기 실행으로 즉각 반응
-f18abcd 백스페이스 라인 시작점 병합 제거, 단순 커서 이동으로 변경
-b2deab1 블록 DOM 동기화를 onBlur로 이전
-ccf8467 블록 시작점에서 백스페이스 시 이전 블록에 병합
-9e8d9da 텍스트 블록 placeholder 제거
-06f85de 상세 헤더 간격 미세 조정
-f0993ca 상세 헤더 카테고리/날짜 앞 아이콘 제거
-6403813 상세 헤더 달력 아이콘과 날짜 간격 축소
-078a02d 노트 상세 헤더 2줄 → 1줄 정리
-ad6ad9a 노트 리스트 아이템: 날짜 포맷 변경 + 액션 메뉴 확장
-8c799f3 노트 상세 뒤로가기 버튼을 브라우저 히스토리 기반으로 변경
-6a11057 언락 broadcast 시 같은 마스터키면 다른 탭 유지
-a342ab3 크립토 다중탭 방어 + 에디터 race 수정 + UI 정렬 개선
+8937239 Supabase env값 trim — realtime WS 무한 재연결 차단
+8faa4aa 일괄 블록→content 마이그레이션 훅 추가
+b338c66 레거시 블록 에디터 UI 제거 (Phase 10-F Phase 1)
+bff5af2 realtime sync 누수 차단: LAST_SYNC_KEY 컷오프 추가
 ```
 
 ---
 
-## Deployment Cadence
-권장: 수정 → 로컬 `npm run build` → `git commit` → `git push` → `vercel --prod --yes`. 전부 자동 한 묶음.
-다음 세션에서 사용자가 "자동 배포 계속 / 수동 전환" 선택.
+## Deployment Cadence (유지)
+수정 → 로컬 `npm run build` → `git commit` → `git push` → `vercel --prod --yes`. 전부 자동 한 묶음.
 
-## 환경 참고 (Phase 9 체크포인트에서 계승)
+## 환경 참고 (이전 체크포인트에서 계승)
 - Supabase URL: https://yjguaevkaymidxvllioo.supabase.co (dev/prod 공유, SYNC_ENABLED 가드로 dev 차단)
 - Vercel 프로젝트: kihyun-5528s-projects/pro_03_note
 - Vercel 도메인: https://pro03note.vercel.app
 - dev 서버: 3003 포트, Node 25 (`/opt/homebrew/opt/node@25/bin`)
 - dev sync 필요 시: `.env.local`에 `NEXT_PUBLIC_ENABLE_SYNC=true`
+- **주의**: Vercel env var 수정 시 값 끝 trailing newline 조심. `lib/supabase.ts`에 trim 방어층 있지만 근본 값은 깔끔하게 유지
 
 ## 메모리 인덱스
 - `project_securenote.md` — 프로젝트 개요
-- `project_crypto_multitab.md` — **다중탭 방어 패턴 (Phase 10 핵심, 절대 되돌리지 말 것)**
-- `project_block_editor.md` — legacy 블록 에디터 패턴 (PlainEditor 전환 후 레퍼런스 용도)
+- `project_crypto_multitab.md` — 다중탭 방어 패턴 (Phase 10 핵심, 절대 되돌리지 말 것)
+- `project_plain_editor.md` — PlainEditor 단일 에디터. 이번 세션에서 마이그레이션 함수는 `lib/migrations/blocks-to-content.ts`로 공용화됨
+- `project_block_editor.md` — legacy 블록 에디터 패턴 (Phase 10-F Phase 1에서 UI 레이어 삭제됨. 레퍼런스 용도)
+- `project_note_card.md` — NoteCard 래퍼
 - `user_profile.md` — 한국어, 보안 중시, 간결 답변
 - `feedback_port.md` — dev 3003 포트
 
-## Phase 9 이전 성과 요약 (축약)
-Phase 1~8: 기반 구축, 마스터키 아키텍처, i18n, UI 전반.
-Phase 9: 이중 암호화 버그 수정, `looksLikeCiphertext`, 데이터 리셋, dev/prod sync 분리, 모바일 스크롤 프리징 해결, 모바일 블록 에디터(FAB+Drawer), 블록 에디터 커서/IME/Enter 분할.
+## Phase 요약 (축약)
+- Phase 1~8: 기반 구축, 마스터키 아키텍처, i18n, UI 전반
+- Phase 9: 이중 암호화 버그 수정, dev/prod sync 분리, 모바일 UX
+- Phase 10: 블록 에디터 → PlainEditor 전환, 크립토 다중탭 방어, NoteCard 추상화
+- **Phase 10-F (진행 중)**: 레거시 정리. Phase 1(UI) 완료, Phase 2(데이터 레이어) 대기.
