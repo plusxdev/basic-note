@@ -94,11 +94,11 @@ export function NoteListItem({
         <CardDescription className="line-clamp-1">
           {note.preview || t("notes.noContent")}
         </CardDescription>
-        <CardAction>
-          <div className="flex items-center gap-1.5">
-            <div className="flex flex-col items-end gap-0.5 text-xs text-muted-foreground">
-              <span className="shrink-0 max-w-[140px] truncate">{folderName}</span>
-              <span className="shrink-0">{format(note.createdAt, "yyyy.MM.dd")}</span>
+        <CardAction className="self-stretch">
+          <div className="flex h-full items-stretch gap-1.5">
+            <div className="flex h-full flex-col justify-between items-end text-xs text-muted-foreground">
+              <span className="shrink-0 max-w-[140px] truncate leading-none">{folderName}</span>
+              <span className="shrink-0 leading-none">{format(note.createdAt, "yyyy.MM.dd")}</span>
             </div>
             {hasMenu && (
               <DropdownMenu>
@@ -106,7 +106,7 @@ export function NoteListItem({
                   <Button
                     variant="ghost"
                     size="xs"
-                    className="h-7 w-7 p-0 text-muted-foreground"
+                    className="h-7 w-7 p-0 text-muted-foreground self-center"
                     onClick={stop}
                   >
                     <MoreHorizontal className="h-3.5 w-3.5" />
