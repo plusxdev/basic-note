@@ -13,6 +13,10 @@ import { useCrypto } from "@/components/providers/crypto-provider";
 import { syncPushEntity } from "@/lib/sync/engine";
 import { looksLikeCiphertext } from "@/lib/crypto";
 import { isLockError } from "@/lib/decrypt-diagnostics";
+import {
+  migrateNoteFromBlocks,
+  plaintextToHtml,
+} from "@/lib/migrations/blocks-to-content";
 
 /**
  * Apple Notes-style editor. Single HTML contentEditable with inline format
@@ -33,102 +37,6 @@ export interface PlainEditorHandle {
   setHeading: (level: 1 | 2 | 3 | null) => void;
   toggleBulletAtCaret: () => void;
   toggleNumberedAtCaret: () => void;
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-/** Convert legacy plaintext (with optional "• " bullet prefixes) to HTML. */
-function plaintextToHtml(text: string): string {
-  if (!text) return "";
-  const lines = text.split("\n");
-  const parts: string[] = [];
-  let inList = false;
-  const flushList = () => {
-    if (inList) {
-      parts.push("</ul>");
-      inList = false;
-    }
-  };
-  for (const line of lines) {
-    const bulletMatch = line.match(/^ *• (.*)$/);
-    if (bulletMatch) {
-      if (!inList) {
-        parts.push("<ul>");
-        inList = true;
-      }
-      parts.push(`<li>${escapeHtml(bulletMatch[1])}</li>`);
-    } else {
-      flushList();
-      parts.push(`<div>${line ? escapeHtml(line) : "<br>"}</div>`);
-    }
-  }
-  flushList();
-  return parts.join("");
-}
-
-/** Rehydrate from old block-based model if present. */
-async function migrateFromBlocks(
-  noteId: string,
-  decrypt: (s: string) => Promise<string>
-): Promise<string> {
-  const blocks = await db.blocks
-    .where("[noteId+sortOrder]")
-    .between([noteId, ""], [noteId, "\uffff"])
-    .toArray();
-  const active = blocks.filter((b) => !b.deletedAt);
-  const parts: string[] = [];
-  let inList = false;
-  const flushList = () => {
-    if (inList) {
-      parts.push("</ul>");
-      inList = false;
-    }
-  };
-  for (const block of active) {
-    let text = "";
-    if (block.content) {
-      try {
-        text = await decrypt(block.content);
-        if (looksLikeCiphertext(text)) text = "";
-      } catch {
-        text = "";
-      }
-    }
-    const esc = escapeHtml(text);
-    switch (block.type) {
-      case "bullet":
-      case "todo":
-      case "numbered":
-        if (!inList) {
-          parts.push("<ul>");
-          inList = true;
-        }
-        parts.push(`<li>${esc || "<br>"}</li>`);
-        break;
-      case "heading": {
-        flushList();
-        const level = block.meta?.level ?? 1;
-        parts.push(`<h${level}>${esc}</h${level}>`);
-        break;
-      }
-      case "divider":
-        flushList();
-        parts.push("<hr>");
-        break;
-      case "text":
-      default:
-        flushList();
-        parts.push(`<div>${esc || "<br>"}</div>`);
-        break;
-    }
-  }
-  flushList();
-  return parts.join("");
 }
 
 export const PlainEditor = forwardRef<PlainEditorHandle, PlainEditorProps>(
@@ -180,7 +88,7 @@ export const PlainEditor = forwardRef<PlainEditorHandle, PlainEditorProps>(
             if (!isLockError(e)) html = "";
           }
         } else {
-          html = await migrateFromBlocks(noteId, decryptText);
+          html = await migrateNoteFromBlocks(noteId, decryptText);
           if (html) {
             try {
               const encrypted = await encryptText(html);

@@ -36,6 +36,7 @@ import {
   startAutoSync,
   stopAutoSync,
 } from "@/lib/sync/engine";
+import { migrateAllNotesToContent } from "@/lib/migrations/blocks-to-content";
 
 interface CryptoContextValue {
   isSetup: boolean;
@@ -326,6 +327,17 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     };
   }, [cryptoKey, resetIdleTimer]);
+
+  // One-shot sweep: migrate any un-migrated notes from the legacy block table
+  // into note.content. The migration module guards re-runs with a localStorage
+  // flag, so this is cheap to call on every unlock.
+  useEffect(() => {
+    if (!cryptoKey) return;
+    void migrateAllNotesToContent(
+      (plain) => encrypt(cryptoKey, plain),
+      (enc) => decrypt(cryptoKey, enc)
+    );
+  }, [cryptoKey]);
 
   // ── Setup (first time) ─────────────────────────────────────
   const setup = useCallback(async (password: string) => {
