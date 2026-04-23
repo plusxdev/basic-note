@@ -286,7 +286,7 @@ export default function NoteEditorPage({
       </div>
 
       {/* Block Editor */}
-      <div className="-mt-3">
+      <div className="-mt-[18px]">
         <PlainEditor ref={editorRef} noteId={noteId} />
       </div>
     </div>
