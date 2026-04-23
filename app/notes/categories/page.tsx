@@ -30,7 +30,7 @@ import { Plus, FolderTree, FileText, Folder, MoreVertical, Pencil, Trash2 } from
 import { toast } from "sonner";
 import { useCategories } from "@/hooks/use-categories";
 import { useNotes } from "@/hooks/use-notes";
-import { NoteListItem } from "@/components/notes/note-list-item";
+import { NoteCard } from "@/components/notes/note-card";
 import { CategoryDialog } from "@/components/dialogs/category-dialog";
 import { useLanguage } from "@/components/providers/language-provider";
 import type { Category, CategoryTreeNode } from "@/lib/types";
@@ -39,16 +39,12 @@ import type { DecryptedNote } from "@/hooks/use-notes";
 function CategoryBranch({
   node,
   allNotes,
-  categories,
-  onMoveToCategory,
   onEditCategory,
   onDeleteCategory,
   noNotesLabel,
 }: {
   node: CategoryTreeNode;
   allNotes: DecryptedNote[];
-  categories: Category[];
-  onMoveToCategory: (noteId: string, categoryId: string | null) => void;
   onEditCategory: (id: string, name: string) => void;
   onDeleteCategory: (id: string, name: string) => void;
   noNotesLabel: string;
@@ -94,12 +90,7 @@ function CategoryBranch({
         ) : (
           <div className="grid gap-2 pl-2">
             {categoryNotes.map((note) => (
-              <NoteListItem
-                key={note.id}
-                note={note}
-                categories={categories}
-                onMoveToCategory={onMoveToCategory}
-              />
+              <NoteCard key={note.id} note={note} />
             ))}
           </div>
         )}
@@ -111,8 +102,6 @@ function CategoryBranch({
                   key={child.id}
                   node={child}
                   allNotes={allNotes}
-                  categories={categories}
-                  onMoveToCategory={onMoveToCategory}
                   onEditCategory={onEditCategory}
                   onDeleteCategory={onDeleteCategory}
                   noNotesLabel={noNotesLabel}
@@ -206,8 +195,6 @@ export default function CategoriesPage() {
               key={node.id}
               node={node}
               allNotes={notes}
-              categories={categories}
-              onMoveToCategory={moveToCategory}
               onEditCategory={handleEditCategory}
               onDeleteCategory={handleDeleteCategory}
               noNotesLabel={t("categories.noNotes")}
@@ -225,12 +212,7 @@ export default function CategoriesPage() {
               <AccordionBlockContent>
                 <div className="grid gap-2 pl-2">
                   {uncategorizedNotes.map((note) => (
-                    <NoteListItem
-                      key={note.id}
-                      note={note}
-                      categories={categories}
-                      onMoveToCategory={moveToCategory}
-                    />
+                    <NoteCard key={note.id} note={note} />
                   ))}
                 </div>
               </AccordionBlockContent>

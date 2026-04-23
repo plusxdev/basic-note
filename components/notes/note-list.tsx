@@ -26,7 +26,7 @@ import { useNotes } from "@/hooks/use-notes";
 import { useCategories } from "@/hooks/use-categories";
 import { useLanguage } from "@/components/providers/language-provider";
 import { CategoryDialog } from "@/components/dialogs/category-dialog";
-import { NoteListItem } from "./note-list-item";
+import { NoteCard } from "./note-card";
 
 interface NoteListProps {
   categoryId?: string | null;
@@ -39,9 +39,8 @@ export function NoteList({
 }: NoteListProps) {
   const { t } = useLanguage();
   const displayTitle = title ?? t("nav.allNotes");
-  const { notes, createNote, moveToCategory, togglePin, deleteNote } =
-    useNotes(categoryId);
-  const { categories, updateCategory, deleteCategoryWithNotes } = useCategories();
+  const { notes, createNote } = useNotes(categoryId);
+  const { updateCategory, deleteCategoryWithNotes } = useCategories();
   const router = useRouter();
   const [showFirstConfirm, setShowFirstConfirm] = useState(false);
   const [showSecondConfirm, setShowSecondConfirm] = useState(false);
@@ -163,14 +162,7 @@ export function NoteList({
       ) : (
         <div className="grid gap-3">
           {notes.map((note) => (
-            <NoteListItem
-              key={note.id}
-              note={note}
-              categories={categories}
-              onMoveToCategory={moveToCategory}
-              onTogglePin={togglePin}
-              onDelete={deleteNote}
-            />
+            <NoteCard key={note.id} note={note} />
           ))}
         </div>
       )}

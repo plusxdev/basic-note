@@ -10,14 +10,12 @@ import { Plus, FileText } from "lucide-react";
 import { ko, enUS } from "date-fns/locale";
 import { format, startOfDay, isSameDay } from "date-fns";
 import { useNotes } from "@/hooks/use-notes";
-import { useCategories } from "@/hooks/use-categories";
-import { NoteListItem } from "@/components/notes/note-list-item";
+import { NoteCard } from "@/components/notes/note-card";
 import { useLanguage } from "@/components/providers/language-provider";
 
 export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const { notes, createNote, moveToCategory } = useNotes();
-  const { categories } = useCategories();
+  const { notes, createNote } = useNotes();
   const router = useRouter();
   const { t, language } = useLanguage();
 
@@ -96,12 +94,7 @@ export default function CalendarPage() {
           ) : (
             <div className="grid gap-3">
               {selectedNotes.map((note) => (
-                <NoteListItem
-                key={note.id}
-                note={note}
-                categories={categories}
-                onMoveToCategory={moveToCategory}
-              />
+                <NoteCard key={note.id} note={note} />
               ))}
             </div>
           )}
