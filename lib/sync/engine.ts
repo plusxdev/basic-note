@@ -233,6 +233,11 @@ async function handleRealtimeChange(payload: {
   const row = payload.new as unknown as EncryptedEntity;
   if (!row || !row.id) return;
 
+  // Skip rows from before the last successful sync. resetEverything() advances
+  // LAST_SYNC_KEY to Date.now() so pre-reset ciphertext (encrypted under the
+  // previous master key) cannot leak back in via realtime events.
+  if (row.updated_at <= getLastSyncAt()) return;
+
   const parsed = JSON.parse(row.data as string);
   const entity = { id: row.id, ...parsed };
 
