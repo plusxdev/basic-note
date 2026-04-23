@@ -95,8 +95,8 @@ export default function NoteEditorPage({
 
   return (
     <div className="max-w-3xl grid gap-6">
-      {/* Toolbar: back + more */}
-      <div className="flex items-center justify-between">
+      {/* Toolbar: back | formatting (centered) | more */}
+      <div className="relative flex items-center justify-between">
         <Button
           variant="ghost"
           size="sm"
@@ -106,47 +106,49 @@ export default function NoteEditorPage({
           <ArrowLeft className="h-4 w-4" />
           {t("editor.back")}
         </Button>
-        <div className="flex items-center gap-0.5">
-        <Button variant="ghost" size="sm" className="text-foreground h-8 w-8 p-0" onClick={() => editorRef.current?.execBold()} aria-label="Bold">
-          <Bold className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="sm" className="text-foreground h-8 w-8 p-0" onClick={() => editorRef.current?.execItalic()} aria-label="Italic">
-          <Italic className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="sm" className="text-foreground h-8 w-8 p-0" onClick={() => editorRef.current?.execUnderline()} aria-label="Underline">
-          <Underline className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="sm" className="text-foreground h-8 w-8 p-0" onClick={() => editorRef.current?.execStrikethrough()} aria-label="Strikethrough">
-          <Strikethrough className="h-4 w-4" />
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="text-foreground h-8 w-8 p-0" aria-label="사이즈">
-              <Type className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[140px]">
-            <DropdownMenuItem onClick={() => editorRef.current?.setHeading(1)}>
-              <Heading1 className="h-4 w-4" /> 제목 1
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => editorRef.current?.setHeading(2)}>
-              <Heading2 className="h-4 w-4" /> 제목 2
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => editorRef.current?.setHeading(3)}>
-              <Heading3 className="h-4 w-4" /> 제목 3
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => editorRef.current?.setHeading(null)}>
-              <Type className="h-4 w-4" /> 본문
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Button variant="ghost" size="sm" className="text-foreground h-8 w-8 p-0" onClick={() => editorRef.current?.toggleBulletAtCaret()} aria-label="불릿 리스트">
-          <List className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="sm" className="text-foreground h-8 w-8 p-0" onClick={() => editorRef.current?.toggleNumberedAtCaret()} aria-label="번호 리스트">
-          <ListOrdered className="h-4 w-4" />
-        </Button>
+
+        {/* Center: formatting toolbar. Absolute center so neighbor widths
+            don't push it off balance. */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-0.5">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="text-foreground h-8 w-8 p-0" aria-label="사이즈">
+                <Type className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="min-w-[140px]">
+              <DropdownMenuItem onClick={() => editorRef.current?.setHeading(1)}>
+                <Heading1 className="h-4 w-4" /> 제목 1
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => editorRef.current?.setHeading(2)}>
+                <Heading2 className="h-4 w-4" /> 제목 2
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => editorRef.current?.setHeading(3)}>
+                <Heading3 className="h-4 w-4" /> 제목 3
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => editorRef.current?.setHeading(null)}>
+                <Type className="h-4 w-4" /> 본문
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="ghost" size="sm" className="text-foreground h-8 w-8 p-0" onClick={() => editorRef.current?.toggleBulletAtCaret()} aria-label="불릿 리스트">
+            <List className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" className="text-foreground h-8 w-8 p-0" onClick={() => editorRef.current?.execBold()} aria-label="Bold">
+            <Bold className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" className="text-foreground h-8 w-8 p-0" onClick={() => editorRef.current?.execItalic()} aria-label="Italic">
+            <Italic className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" className="text-foreground h-8 w-8 p-0" onClick={() => editorRef.current?.execUnderline()} aria-label="Underline">
+            <Underline className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" className="text-foreground h-8 w-8 p-0" onClick={() => editorRef.current?.execStrikethrough()} aria-label="Strikethrough">
+            <Strikethrough className="h-4 w-4" />
+          </Button>
+        </div>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="text-foreground">
@@ -239,7 +241,6 @@ export default function NoteEditorPage({
             </AlertDialog>
           </DropdownMenuContent>
         </DropdownMenu>
-        </div>
       </div>
 
       {/* Category + Created date */}
@@ -285,7 +286,9 @@ export default function NoteEditorPage({
       </div>
 
       {/* Block Editor */}
-      <PlainEditor ref={editorRef} noteId={noteId} />
+      <div className="-mt-3">
+        <PlainEditor ref={editorRef} noteId={noteId} />
+      </div>
     </div>
   );
 }
