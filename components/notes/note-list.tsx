@@ -24,6 +24,7 @@ import { Plus, FileText, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useNotes } from "@/hooks/use-notes";
 import { useCategories } from "@/hooks/use-categories";
+import { useLoadingIndicator } from "@/components/providers/global-loading";
 import { useLanguage } from "@/components/providers/language-provider";
 import { CategoryDialog } from "@/components/dialogs/category-dialog";
 import { NoteCard } from "./note-card";
@@ -39,8 +40,9 @@ export function NoteList({
 }: NoteListProps) {
   const { t } = useLanguage();
   const displayTitle = title ?? t("nav.allNotes");
-  const { notes, createNote } = useNotes(categoryId);
+  const { notes, isLoading, createNote } = useNotes(categoryId);
   const { updateCategory, deleteCategoryWithNotes } = useCategories();
+  useLoadingIndicator(`note-list:${categoryId ?? "all"}`, isLoading);
   const router = useRouter();
   const [showFirstConfirm, setShowFirstConfirm] = useState(false);
   const [showSecondConfirm, setShowSecondConfirm] = useState(false);
@@ -152,7 +154,7 @@ export function NoteList({
         </AlertDialogContent>
       </AlertDialog>
 
-      {notes.length === 0 ? (
+      {!isLoading && (notes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted mb-4">
             <FileText className="h-8 w-8 text-muted-foreground" />
@@ -165,7 +167,7 @@ export function NoteList({
             <NoteCard key={note.id} note={note} />
           ))}
         </div>
-      )}
+      ))}
     </div>
   );
 }

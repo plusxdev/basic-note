@@ -7,6 +7,7 @@ import { Card, CardContent } from "@minnjii/dx-kit/ui/card";
 import { Button } from "@minnjii/dx-kit/ui/button";
 import { Badge } from "@minnjii/dx-kit/ui/badge";
 import { Plus, FileText } from "lucide-react";
+import { useLoadingIndicator } from "@/components/providers/global-loading";
 import { ko, enUS } from "date-fns/locale";
 import { format, startOfDay, isSameDay } from "date-fns";
 import { useNotes } from "@/hooks/use-notes";
@@ -15,7 +16,8 @@ import { useLanguage } from "@/components/providers/language-provider";
 
 export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const { notes, createNote } = useNotes();
+  const { notes, isLoading, createNote } = useNotes();
+  useLoadingIndicator("calendar-page", isLoading);
   const router = useRouter();
   const { t, language } = useLanguage();
 
@@ -82,7 +84,7 @@ export default function CalendarPage() {
             </h2>
           </div>
 
-          {selectedNotes.length === 0 ? (
+          {isLoading ? null : selectedNotes.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted mb-3">
                 <FileText className="h-6 w-6 text-muted-foreground" />

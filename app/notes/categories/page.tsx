@@ -28,6 +28,7 @@ import {
 } from "@minnjii/dx-kit/ui/alert-dialog";
 import { Plus, FolderTree, FileText, Folder, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useLoadingIndicator } from "@/components/providers/global-loading";
 import { useCategories } from "@/hooks/use-categories";
 import { useNotes } from "@/hooks/use-notes";
 import { NoteCard } from "@/components/notes/note-card";
@@ -116,8 +117,10 @@ function CategoryBranch({
 }
 
 export default function CategoriesPage() {
-  const { tree, categories, createCategory, updateCategory, deleteCategoryWithNotes } = useCategories();
-  const { notes, createNote, moveToCategory } = useNotes();
+  const { tree, categories, isLoading: categoriesLoading, createCategory, updateCategory, deleteCategoryWithNotes } = useCategories();
+  const { notes, isLoading: notesLoading, createNote, moveToCategory } = useNotes();
+  const isLoading = categoriesLoading || notesLoading;
+  useLoadingIndicator("categories-page", isLoading);
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
   const { t } = useLanguage();
@@ -172,7 +175,7 @@ export default function CategoriesPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("categories.title")}</h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setDialogOpen(true)}>
             <Plus className="h-4 w-4" />
             {t("notes.category")}
@@ -184,7 +187,7 @@ export default function CategoriesPage() {
         </div>
       </div>
 
-      {tree.length === 0 && uncategorizedNotes.length === 0 ? (
+      {isLoading ? null : tree.length === 0 && uncategorizedNotes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted mb-4">
             <FolderTree className="h-8 w-8 text-muted-foreground" />

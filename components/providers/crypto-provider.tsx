@@ -184,7 +184,12 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (settings === null) return;
     if (settings !== undefined) {
-      setIsLoading(false);
+      // settings가 로드됐어도, 저장된 세션이 있으면 auto-unlock effect가
+      // 끝날 때 isLoading을 false로 풀도록 남겨둔다. 그렇지 않으면
+      // 새로고침 시 "LockScreen 깜빡임 → 해제" 순서로 보이게 된다.
+      const timeout = settings.lockTimeoutMinutes ?? DEFAULT_LOCK_TIMEOUT_MINUTES;
+      const hasSavedSession = loadSession(timeout) !== null;
+      if (!hasSavedSession) setIsLoading(false);
       return;
     }
     // After a reset, skip remote settings pull so the user can freshly set up
@@ -241,7 +246,9 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    doAutoUnlock().catch(() => clearSession());
+    doAutoUnlock()
+      .catch(() => clearSession())
+      .finally(() => setIsLoading(false));
   }, [settings, cryptoKey]);
 
   // Safety timeout

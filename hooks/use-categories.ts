@@ -43,8 +43,7 @@ export function useCategories() {
       const all = await db.categories.orderBy("sortOrder").toArray();
       return all.filter((c) => !c.deletedAt);
     },
-    [],
-    [] as Category[]
+    []
   );
 
   // Decrypt category names
@@ -66,8 +65,7 @@ export function useCategories() {
       );
       return decrypted;
     },
-    [rawCategories, isUnlocked],
-    [] as Category[]
+    [rawCategories, isUnlocked]
   );
 
   // Note counts per category
@@ -83,11 +81,16 @@ export function useCategories() {
       }
       return counts;
     },
-    [],
-    {} as Record<string, number>
+    []
   );
 
   const tree = categories && noteCounts ? buildTree(categories, noteCounts) : [];
+
+  const isLoading =
+    isUnlocked &&
+    (rawCategories === undefined ||
+      (rawCategories.length > 0 && categories === undefined) ||
+      noteCounts === undefined);
 
   const createCategory = useCallback(
     async (name: string, parentId: string | null = null, icon: string | null = null) => {
@@ -191,6 +194,7 @@ export function useCategories() {
   return {
     categories: categories ?? [],
     tree,
+    isLoading,
     createCategory,
     updateCategory,
     deleteCategory,

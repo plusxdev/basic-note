@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { nanoid } from "nanoid";
 import { db } from "@/lib/db";
@@ -36,8 +36,7 @@ export function useNotes(categoryId?: string | null) {
       const unpinned = filtered.filter((n) => !n.pinned);
       return [...pinned, ...unpinned];
     },
-    [categoryId],
-    [] as Note[]
+    [categoryId]
   );
 
   const notes = useLiveQuery(
@@ -96,9 +95,31 @@ export function useNotes(categoryId?: string | null) {
       );
       return decrypted;
     },
-    [rawNotes, isUnlocked],
-    [] as DecryptedNote[]
+    [rawNotes, isUnlocked]
   );
+
+  // useLiveQuery는 deps 변경 직후에도 이전 결과를 그대로 유지한다. 그래서
+  // categoryId가 바뀐 순간 UI는 이전 카테고리의 결과로 empty 여부를 먼저
+  // 판단해버린다. 마지막으로 도착한 결과가 어느 key에 대한 것인지 별도로
+  // 추적해서, 아직 새 결과가 오지 않았으면 명시적으로 로딩 상태로 다룬다.
+  const currentKey = isUnlocked ? (categoryId ?? null) : undefined;
+  const [fetchedKey, setFetchedKey] = useState<string | null | undefined>(
+    currentKey
+  );
+  useEffect(() => {
+    if (rawNotes !== undefined && fetchedKey !== currentKey) {
+      setFetchedKey(currentKey);
+    }
+  }, [rawNotes, currentKey, fetchedKey]);
+
+  const isLoading =
+    isUnlocked &&
+    (rawNotes === undefined ||
+      fetchedKey !== currentKey ||
+      notes === undefined ||
+      // rawNotes가 도착했는데 decryption 결과인 notes가 아직 이전 빈 결과를
+      // 유지하고 있는 중간 상태도 로딩으로 친다.
+      (rawNotes.length > 0 && notes.length === 0));
 
   const createNote = useCallback(
     async (categoryId: string | null = null): Promise<string | null> => {
@@ -181,6 +202,7 @@ export function useNotes(categoryId?: string | null) {
 
   return {
     notes: notes ?? [],
+    isLoading,
     createNote,
     deleteNote,
     updateNoteTitle,
