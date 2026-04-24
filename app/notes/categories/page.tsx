@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@minnjii/dx-kit/ui/button";
 import {
@@ -128,6 +128,10 @@ export default function CategoriesPage() {
   // Delete state (2-step)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [showSecondConfirm, setShowSecondConfirm] = useState(false);
+  // Step 1 → Step 2 전환 직후 Step 1이 unmount되며 호출되는 onOpenChange(false)에서
+  // deleteTarget을 null로 초기화하지 않도록 동기적으로 표시하는 플래그. state closure
+  // 로는 같은 render 안에서 showSecondConfirm이 아직 false라 race가 난다.
+  const advancingToStep2Ref = useRef(false);
 
   const uncategorizedNotes = notes.filter((n) => !n.categoryId);
 
@@ -145,10 +149,9 @@ export default function CategoriesPage() {
   };
 
   const handleFirstConfirm = () => {
-    setDeleteTarget((prev) => {
-      if (prev) setShowSecondConfirm(true);
-      return prev;
-    });
+    if (!deleteTarget) return;
+    advancingToStep2Ref.current = true;
+    setShowSecondConfirm(true);
   };
 
   const handleFinalDelete = async () => {
@@ -248,7 +251,14 @@ export default function CategoriesPage() {
       {/* Delete: Step 1 */}
       <AlertDialog
         open={!!deleteTarget && !showSecondConfirm}
-        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        onOpenChange={(open) => {
+          if (open) return;
+          if (advancingToStep2Ref.current) {
+            advancingToStep2Ref.current = false;
+            return;
+          }
+          setDeleteTarget(null);
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
