@@ -1,0 +1,196 @@
+# CLAUDE_HISTORY — Project Checkpoints
+
+<!-- 최신 체크포인트가 위, 과거가 아래. 신규 엔트리는 항상 상단에 prepend. -->
+
+---
+
+## 🕒 Checkpoint — 2026-04-24 (Phase 10-F Phase 2A — 레거시 blocks 코드 레이어 제거 + UX 안정화)
+
+**Current Milestone**: Phase 10-F · Phase 2A — 레거시 blocks 코드 레이어 제거 + UX 안정화 (삭제 race, 리스트 깜빡임, 잠금화면 플리커)
+
+직전 체크포인트(`8937239`) 이후 4 커밋, 전부 main 푸시. 최신: `ffb66dd`. 3회 prod 배포(gitignore 커밋은 소스 영향 없어 skip).
+
+Production: https://pro03note.vercel.app · Repo: https://github.com/plusxdev/pro-03-note
+
+---
+
+## Key Achievements
+
+### 1. Phase 10-F Phase 2A — blocks 코드 레이어 제거 (`fb1e55f`)
+Dexie 스키마/타입은 보존하고 **코드에서만** 블록 read/write 로직 전부 제거. 미확인 기기 안전망 유지.
+
+**제거**
+- `lib/types.ts`: `SyncEntityType`에서 `"block"` 제거
+- `lib/sync/engine.ts`: push/pull/realtime의 block entity case 전부 삭제, `syncPush`의 blocks 루프 제거, `pushEntity`/`syncPushEntity` 시그니처에서 `Block` 제거
+- `hooks/use-notes.ts`: createNote의 빈 block 생성 + `db.transaction(blocks)` 제거, deleteNote의 blocks soft-delete 제거, preview fallback 제거
+- `hooks/use-categories.ts`: `deleteCategoryWithNotes`의 blocks 처리 제거
+
+**보존 (Phase 2B에서 처리)**
+- `Block` / `BlockType` / `BlockMeta` 타입 (db.ts / crypto-provider migrateData / settings export-import가 참조)
+- Dexie `blocks` 스토어
+- `lib/migrations/blocks-to-content.ts` 및 unlock 시점 자동 sweep
+- `lib/reset.ts`의 `db.blocks.clear()`
+- `app/settings/page.tsx`의 export/import blocks 필드
+
+**부수 효과**: sync에서 `"block"` entity 빠졌으므로 미마이그레이션 기기의 blocks는 Supabase로 더 이상 push되지 않음. 로컬 blocks는 `migrateAllNotesToContent`가 unlock 시 흡수.
+
+### 2. 카테고리 리스트 삭제 race 수정 (`0792330`)
+증상: `/notes/categories` 리스트에서 카테고리 삭제 다이얼로그 2단계 → "삭제" 눌러도 무반응. 상세 페이지(NoteList)에서는 정상.
+
+**원인**: Step 1 → Step 2 전환 시 Step 1 dialog의 `open={!!deleteTarget && !showSecondConfirm}`이 false가 되며 닫힘. Step 1의 `onOpenChange(false)` 콜백에서 **state closure race**로 `showSecondConfirm`은 아직 stale(false) — `setDeleteTarget(null)`이 실행. handleFinalDelete가 `if (!deleteTarget) return`으로 early-return.
+
+**해결**: `useRef`로 "Step 2 진행 중" 플래그를 동기적으로 표시. handleFirstConfirm에서 ref=true → Step 1 onOpenChange가 ref를 보고 skip, 그 외 경로(Cancel/Outside click)에서만 setDeleteTarget(null).
+
+NoteList(상세)는 categoryId가 prop이라 state 꼬임 없어 영향 없었음.
+
+### 3. 로딩 UX 개선 (`6168bcb`)
+3개 문제를 한 커밋에 묶어 처리.
+
+**A. 새로고침 시 잠금화면 깜빡임**
+- crypto-provider의 `useLiveQuery(settings)`가 로드되는 순간 `isLoading=false`로 풀려 AuthGate가 LockScreen 먼저 렌더 → 세션 자동 언락 완료 → 본문.
+- 수정: settings 로드 후에도 saved session이 있으면 isLoading 유지. 자동 언락 `finally`에서 isLoading=false로 풀도록 이관.
+
+**B. 전역 로딩 인디케이터**
+- 신설 `components/providers/global-loading.tsx`: 여러 페이지/컴포넌트의 로딩 상태를 Set으로 집계, 하나라도 loading이면 전역 `isLoading=true`. `useLoadingIndicator(id, isLoading)`으로 자동 register/unregister.
+- `app/notes/layout.tsx`의 탭 네비 헤더 우측(`ml-auto`)에 `HeaderLoadingIndicator` 고정 배치. 페이지마다 위치 흔들림 없음.
+- NoteList / CategoriesPage / CalendarPage 에서 `useLoadingIndicator` 호출.
+
+**C. 리스트 깜빡임 ("노트 없음"이 잠깐 떴다 사라짐)**
+- 원인: dexie-react-hooks의 `useLiveQuery`가 deps 변경 시 **이전 결과를 그대로 유지**하는 stale-while-revalidate 동작. categoryId A→B 이동 시 rawNotes는 여전히 A의 결과로 평가되어 empty state 조기 판정.
+- 또 한 층: notes decrypt 쿼리가 rawNotes 도착 후에도 이전 default(`[]`)를 유지하면 "rawNotes는 있는데 notes는 비었음" 중간 상태가 empty로 보임.
+- 수정:
+  - `useNotes`에 `fetchedKey` state 추가. 최신 결과가 어느 categoryId에 대한 것인지 추적.
+  - isLoading 공식: `rawNotes === undefined || fetchedKey !== currentKey || notes === undefined || (rawNotes.length > 0 && notes.length === 0)`
+  - `useCategories`에도 `isLoading` 반환 (rawCategories/categories/noteCounts 상태 조합)
+
+### 4. `.gitignore` 정비 (`ffb66dd`)
+`.env.vercel.*` 추가. 지난 세션 `vercel env pull`로 `.env.vercel.prod` 생성 후 수동 rm했던 재발 방지.
+
+---
+
+## Technical Decisions
+
+| 결정 | 이유 |
+|---|---|
+| Phase 2 를 2A(코드)/2B(스키마) 로 쪼갬 | 모바일 기기 `bn_blocks_migrated_v1` 플래그 미확인. Dexie upgrade 시점엔 cryptoKey가 없어 decrypt→re-encrypt 불가 → 안전망으로 blocks 스토어 유지하고 unlock 시 자동 sweep |
+| 카테고리 삭제 fix 로 ref 선택 | state closure race를 state 조건으로 풀려면 flushSync 등 지저분. ref는 동기적 → onOpenChange 호출 시점에 즉시 반영 |
+| 전역 로딩 Context 도입 | 페이지마다 header 구성이 달라 로컬 Spinner 위치가 흔들리는 문제. Set 기반 집계는 여러 훅이 동시에 loading=true일 때도 깔끔 |
+| notes decrypt 쿼리 stale 보정에 `rawNotes.length > 0 && notes.length === 0` 추가 | fetchedKey만으로는 "rawNotes 도착했는데 notes 쿼리가 아직 이전 빈 결과"를 못 잡음. 단순한 길이 불일치로 대부분 커버 |
+| 크립토 provider: 자동 언락 중 isLoading 유지 | 세션 자동 언락은 수백 ms~수초 걸릴 수 있음. 그 사이 LockScreen 깜빡임보다 Spinner가 나음 |
+
+---
+
+## Pending Tasks
+
+### 높음
+1. **Phase 10-F Phase 2B — 레거시 blocks 스키마 완전 제거**
+   - 선행 조건: **모바일 기기**에서 `localStorage("bn_blocks_migrated_v1")` timestamp 확인 (이번 세션에도 "로컬 연결 안 됨"으로 확인 불가)
+   - 제거 대상:
+     - `lib/db.ts`: blocks 스토어 drop (Dexie v2 bump, 마이그레이션 핸들러에서 "이미 sweep 완료된 기기만" 가정)
+     - `lib/types.ts`: `Block`, `BlockType`, `BlockMeta` 제거
+     - `lib/migrations/blocks-to-content.ts` 모듈 자체 제거 + unlock hook의 `migrateAllNotesToContent` 호출 제거
+     - `components/providers/crypto-provider.tsx`: `migrateData`의 blocks 재암호화 루프 제거
+     - `lib/reset.ts`: `db.blocks.clear()` 및 transaction 참조 제거
+     - `app/settings/page.tsx`: `ExportData.blocks`, export/import 로직 제거 (백업 파일 v1 호환 결정 필요 — 자동 마이그레이션 or 버전 번호 bump)
+     - `plain-editor.tsx`의 `migrateNoteFromBlocks`/`plaintextToHtml` 호출 지점 정리
+
+### 중간
+2. **진단 로깅 실전 확인** — `bn_decrypt_fail_log` 덤프 확보 (배포 후 증상 소멸로 대기)
+3. **다중 노트 선택/일괄 작업** — NoteCard 추상화로 확장 쉬움
+4. **헤딩 현재 상태 표시** — 툴바 드롭다운에서 현재 라인 heading level 체크 표시
+
+### 낮음 (UX)
+5. 하이라이트(형광펜), 링크, 이미지/첨부. execCommand 한계 → 규모 커지면 **TipTap** 고려
+6. 자동 백업 / 버전 히스토리
+
+---
+
+## 중장기 로드맵
+
+### R1. 전반 리팩토링
+Phase 10-F Phase 2B 완료 후 착수. 범위 후보:
+- hooks 레이어: useNotes/useCategories 내부 useLiveQuery 중첩을 "rawQuery + local state decrypt" 구조로 단순화 (stale-while-revalidate race 근본 제거)
+- sync/engine.ts 모듈 분리 (push/pull/realtime/cursor 각각)
+- crypto-provider 거대해짐 — setup/unlock/change-password/recovery 훅 분리 검토
+- 테스트 없음 — 최소한 crypto + migration + sync의 unit test 레이어
+- 타입 중복/any 감사
+
+### R2. 데스크탑/모바일 설치 배포
+"다운받아 설치해서 사용" 목표. 옵션:
+- **Tauri**: Rust 기반, 번들 경량(~10MB), 시스템 웹뷰 사용. macOS/Windows/Linux. 추천 1순위.
+- **Electron**: 생태계 성숙, 번들 무거움(~100MB). 2순위.
+- **PWA + installable**: 가장 가벼움. 브라우저 install. "다운로드" 느낌은 약함.
+- **iOS/Android**: Capacitor 또는 Tauri mobile.
+
+**결정 필요 (착수 전)**:
+- 타겟 OS — 데스크탑만? 모바일 포함?
+- 동기화 유지 — 설치판도 Supabase realtime 계속 쓰는가 (사용자별 supabase 계정 문제)
+- 배포 채널 — GitHub Releases? 자체 도메인? 자동 업데이트(Tauri/Electron updater)?
+- 코드 서명 — macOS는 Apple Developer ID 필요($99/y). Windows도 signing cert 권장.
+
+**선결 작업**:
+- 정식 앱 아이콘/brand 확정
+- 민감정보(env) bundle 전략. Supabase URL/anon key는 client-bundled — 설치판도 동일. 단 서비스 역할(anon) 제한 재확인.
+- Service Worker/오프라인 시나리오 (이미 Dexie 로컬 우선이라 유리)
+- 자동 업데이트 채널
+
+### 드롭됨
+- ~~자동 불릿 변환 (`- ` → `• `) 재구현~~
+
+---
+
+## Agent Notes
+
+### Director
+- 세션 작업량: 4 커밋 / 배포 3회 (gitignore는 소스 영향 없어 skip). 전부 안정.
+- 커밋 cadence: Phase 2A → Phase 2A 배포 후 버그 발견 → 수정 + UX 개선 묶음 → 마무리 gitignore.
+- `#end` 루틴 유지.
+
+### Frontend
+- **state closure race 패턴 기억**: Radix UI의 controlled AlertDialog에서 한 render cycle 안에 open prop을 flip하면, onOpenChange 콜백 내부에서 참조하는 state는 stale closure. useRef로 동기 표시가 정답.
+- **dexie-react-hooks의 stale-while-revalidate**: `useLiveQuery`는 deps 변경 시 이전 결과를 그대로 반환하며 새 결과 도착까지 바뀌지 않음. 이게 리스트 깜빡임의 근본. 쿼리 결과의 "어떤 key에 대한 것인지"를 별도 추적해야 UI가 정확함.
+- **Spinner 위치는 전역 슬롯이 정답**: 페이지마다 header 버튼 구성이 다르면 로컬 Spinner가 시각적으로 흔들림. `ml-auto` 고정 슬롯 + Context로 상태 주입이 깔끔.
+
+### Security
+- 지난 세션 Vercel env trailing newline 이슈의 후속 방어로 `.env.vercel.*` gitignore 추가. `vercel env pull` 실수 커밋 방지.
+
+---
+
+## 주요 커밋 이력
+
+```
+ffb66dd .env.vercel.* gitignore 추가
+6168bcb 로딩 상태 전역 헤더 표시 + 리스트 깜빡임 차단
+0792330 카테고리 리스트 삭제 동작 복구
+fb1e55f 레거시 blocks 코드 레이어 제거 (Phase 10-F Phase 2A)
+```
+
+---
+
+## Deployment Cadence (유지)
+수정 → 로컬 `npm run build` → `git commit` → `git push` → `vercel --prod --yes`. 소스 무관 변경(.gitignore 등)은 배포 skip.
+
+## 환경 참고 (이전 체크포인트에서 계승)
+- Supabase URL: https://yjguaevkaymidxvllioo.supabase.co (dev/prod 공유, SYNC_ENABLED 가드로 dev 차단)
+- Vercel 프로젝트: kihyun-5528s-projects/pro_03_note
+- Vercel 도메인: https://pro03note.vercel.app
+- dev 서버: 3003 포트, Node 25 (`/opt/homebrew/opt/node@25/bin`)
+- dev sync 필요 시: `.env.local`에 `NEXT_PUBLIC_ENABLE_SYNC=true`
+- **주의**: `192.168.0.37:3003`로 접속하면 HMR cross-origin 차단. `localhost:3003` 권장. 필요하면 `next.config.js`에 `allowedDevOrigins: ['192.168.0.37']` 추가.
+
+## 메모리 인덱스
+- `project_securenote.md` — 프로젝트 개요
+- `project_crypto_multitab.md` — 다중탭 방어 패턴 (Phase 10 핵심, 절대 되돌리지 말 것)
+- `project_plain_editor.md` — PlainEditor 단일 에디터
+- `project_block_editor.md` — legacy 블록 에디터 (레퍼런스 용도)
+- `project_note_card.md` — NoteCard 래퍼
+- `project_block_cleanup_phase.md` — Phase 10-F 정리 진행. 2A(코드) 완료, 2B(스키마) 대기
+- `project_vercel_env_lf.md` — Supabase env trailing LF 이슈
+- `user_profile.md` — 한국어, 보안 중시, 간결 답변
+- `feedback_port.md` — dev 3003 포트
+
+## Phase 요약 (축약)
+- Phase 1~8: 기반 구축, 마스터키 아키텍처, i18n, UI 전반
+- Phase 9: 이중 암호화 버그 수정, dev/prod sync 분리, 모바일 UX
+- Phase 10: 블록 에디터 → PlainEditor 전환, 크립토 다중탭 방어, NoteCard 추상화
+- **Phase 10-F (진행 중)**: 레거시 정리. Phase 1(UI) · Phase 2A(코드) 완료, Phase 2B(스키마) 대기.
