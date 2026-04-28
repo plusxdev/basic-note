@@ -4,6 +4,35 @@
 
 ---
 
+## 🕒 Checkpoint — 2026-04-28 (문서 체계 재편: CLAUDE.md 추상화 + DESIGN/HISTORY 분리)
+
+**Current Milestone**: 운영 문서 인프라 리팩토링 — 프로젝트 무관 추상 모델과 프로젝트 고유 룰 분리, 누적 히스토리 컨벤션 확립.
+
+**Key Achievements**
+- `CLAUDE.md`를 도메인 무관 운영 프로토콜로 재작성 — 세션 시작 루틴, 멀티 에이전트 체계(v2.0), 응답 스타일 공통 수칙, 히스토리 포맷
+- `CLAUDE_DESIGN.md` 신설 — `@minnjii/dx-kit` 컴포넌트 매핑·디자인 토큰·금지 사항·기술 스택 분리
+- `agent_history.md` → `CLAUDE_HISTORY.md` 리네임 + 누적 prepend 컨벤션 적용 (최신이 위, 과거가 아래)
+- `AGENTS.md` 제거 (멀티 에이전트 체계 내용은 `CLAUDE.md`에 흡수)
+- 세션 시작 시 `CLAUDE_HISTORY.md` 부재면 즉시 빈 템플릿 생성하는 룰 추가
+- 단일 커밋 `2b48f6d` (5 files, +467/-657) → main push 완료
+
+**Pending Tasks**
+- Phase 10-F Phase 2B (레거시 blocks 스키마 완전 제거) — 모바일 기기 `bn_blocks_migrated_v1` 확인 선행
+- 진단 로깅 실전 확인 (`bn_decrypt_fail_log` 덤프, 배포 후 증상 소멸로 대기)
+- 다중 노트 선택/일괄 작업, 헤딩 현재 상태 표시 (UX 개선 큐)
+
+**Technical Decisions**
+- 문서 분리 컨벤션: `CLAUDE.md`(추상) / `CLAUDE_DESIGN.md`(프로젝트 룰) / `CLAUDE_HISTORY.md`(누적 체크포인트). 다른 프로젝트로 이식 시 `CLAUDE.md`만 그대로 복사하고 `CLAUDE_DESIGN.md`만 갈아끼움.
+- 히스토리는 단일 파일 누적(prepend). 3개월 이상 된 항목은 압축·요약 허용.
+- 시작 프로토콜에 "히스토리 없으면 즉시 생성" 명시 — 첫 세션부터 일관성 확보.
+
+**Agent Notes**
+- Director: 이번 세션은 메타·문서 작업이라 코드 변경 없음. 다음 세션은 Phase 2B 본격 진입(파괴적 변경 포함, 별도 브랜치 권장).
+- Designer: 이제 `CLAUDE_DESIGN.md`를 최우선 참조 문서로 취급. dx-kit 외 디자인 시스템 도입 시 이 파일 전체 교체.
+- 사용자 피드백: 추상화 모델에 프로젝트 상세 데이터를 박지 말 것 — 템플릿/예시는 placeholder 유지. (이번 세션에서 실수 1회 후 수정)
+
+---
+
 ## 🕒 Checkpoint — 2026-04-24 (Phase 10-F Phase 2A — 레거시 blocks 코드 레이어 제거 + UX 안정화)
 
 **Current Milestone**: Phase 10-F · Phase 2A — 레거시 blocks 코드 레이어 제거 + UX 안정화 (삭제 race, 리스트 깜빡임, 잠금화면 플리커)
