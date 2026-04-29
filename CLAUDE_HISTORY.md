@@ -4,6 +4,41 @@
 
 ---
 
+## 🕒 Checkpoint — 2026-04-29 (Phase 10-F 종결 + 모바일 진입점 + 인수인계 갭 인지)
+
+**Current Milestone**: 레거시 blocks 시스템 완전 제거. 모바일 사이드바 진입점 누락 보강. 메모리/히스토리 인수인계 시스템의 한계(negative space 미기록) 노출.
+
+세 커밋 모두 main push + prod 배포 완료.
+
+**Key Achievements**
+- **Phase 2B-1 (`e840fe0`)** — 코드 잔여물·i18n·백업 포맷 정리. settings에서 `Block` import / `ExportData.blocks` 제거, 백업 v1→v2 bump (v1은 `LegacyImportV1`로 호환 import). 단축키/슬래시 가이드 카드 UI 통째 제거. 한·영 i18n에서 `block.*`/`shortcut.*Block`/`placeholder.*` 등 34개 dead key 제거. 3 files, +17/-172.
+- **모바일 사이드바 진입점 (`e2f3a56`)** — `notes/layout.tsx`·`settings/layout.tsx` 헤더에 `<SidebarTrigger className="md:hidden -ml-2" />` 추가. 그 전엔 `SidebarTrigger`가 `app-sidebar.tsx` L64 사이드바 내부에만 있어, 모바일에서 사이드바가 닫혀있으면 잠금/설정 메뉴 진입 자체가 불가능했음. 처음부터 빠진 갭(원래 있다가 깨진 게 아님). 2 files, +14/-3.
+- **Phase 2B-2 (`dd20b17`)** — 스키마/타입/모듈 완전 제거. `lib/db.ts`에 `db.version(2).stores({ blocks: null })` 추가로 blocks 스토어 drop, `Block`/`BlockType`/`BlockMeta` 타입 삭제, `lib/migrations/blocks-to-content.ts` 모듈+디렉토리 삭제, `crypto-provider.tsx`의 `migrateAllNotesToContent` 호출 + `migrateData` blocks 루프 제거 (대신 note.content도 재암호화하도록 보강), `plain-editor.tsx`의 `migrateNoteFromBlocks` 제거 + `plaintextToHtml` 인라인 흡수, `lib/reset.ts`의 `db.blocks.clear()` 제거. 6 files, +39/-254.
+- **선결 조건 검증 완료** — 데스크탑·모바일 모두에서 `localStorage("bn_blocks_migrated_v1")` 값 확인. 모바일은 이번 세션 중 자동 sweep으로 `1777459581357` 기록됨. 데이터 증발 0 리스크 상태에서 2B-2 진입.
+
+**Pending Tasks**
+- **인수인계 시스템(마크다운) 재설계** — 사용자 지시. `CLAUDE.md`/`MEMORY.md` 구조에 *negative space*(원래 빠져있던 갭) 기록 영역이 없어, 모바일 메뉴 부재 같은 누락이 다음 세션으로 인계되지 않는 한계 노출. 다음 세션 시작 시 우선 처리.
+- Dexie v2 마이그레이션 사이드이펙트 실전 관찰 — 데스크탑·모바일에서 한 번씩 unlock 시 v1→v2 upgrade 자동 실행 후 정상 동작 확인.
+- 진단 로깅 실전 확인 (`bn_decrypt_fail_log` 덤프, 배포 후 증상 소멸로 대기).
+- UX 백로그: 다중 노트 선택/일괄 작업, 헤딩 현재 상태 표시, 하이라이트·링크·이미지 (execCommand 한계 시 TipTap), 자동 백업 / 버전 히스토리.
+- 중장기 R1(리팩토링: useLiveQuery 중첩 제거, sync 모듈 분리, crypto-provider 훅 분할, unit test 도입) / R2(Tauri 1순위로 데스크탑·모바일 설치 배포).
+
+**Technical Decisions**
+- **Dexie v2 stores config 형식**: drop만 명시 (`{ blocks: null }`)하고 v1 stores 그대로 보존 — 신규 install 사용자도 v1→v2 경로를 그대로 타고 와서 결과적으로 blocks 스토어 없는 상태로 도착. 깨끗한 single-step.
+- **백업 v1 호환**: 자동 변환 대신 `LegacyImportV1` 타입으로 받아 blocks 필드 무시. 단순하고 미래에 v3 도입해도 안전.
+- **`plaintextToHtml` 인라인 결정**: 별도 모듈 의존성 끊되 legacy 평문 노트 (HTML이 아닌 plaintext로 저장된 옛 note.content) 호환은 유지. 옛 노트 수가 적어도 0 비용 안전망.
+- **`migrateData` 보강**: master key 마이그레이션 시 categories.name + notes.title만 재암호화하던 기존 코드를 notes.content도 함께 재암호화하도록 확장. blocks 의존 제거하면서 본문 보존 경로 보강.
+- **모바일 트리거 클래스**: `md:hidden -ml-2`. dx-kit/shadcn sidebar는 `useIsMobile()` 기반으로 자동 Sheet 모드 전환되므로 trigger만 노출하면 됨. `-ml-2`로 px-6 패딩 시각 정렬.
+- **인수인계 누락 인지**: "원래 빠져있던 갭(negative space)" 같은 항목은 변경 결정·미결 과업 카테고리에 안 잡힘 → 명시적 기록 슬롯 필요.
+
+**Agent Notes**
+- **Director**: 세션 작업량 — 3 커밋 / 3 prod 배포 / 메모리 2개 갱신·1개 신규. Phase 10-F를 한 세션에 종결까지 끌고 갈 수 있었던 건 Phase 2B-1/2B-2 분리로 위험 분산했기 때문. 다음 세션은 마크다운 설계 재정비부터 시작 권장. CLAUDE.md에 *negative space* 슬롯 추가가 핵심 과제.
+- **Frontend**: 데이터 마이그레이션 3단계 패턴(코드 정리 → 모든 클라이언트 sweep 확인 → 스키마 drop)이 standardized. 다음 비슷한 작업(예: 추후 데이터 모델 변경)에 그대로 적용 가능. Dexie v1→v2 upgrade가 cryptoKey 없는 시점에 자동 실행되는 제약이 핵심 — 이 때문에 sweep을 unlock 이후로 미루는 안전망이 필수. 이번엔 모든 기기에서 sweep 완료 후 진행해서 안전망 자체를 제거할 수 있었음.
+- **Publisher / Designer**: 모바일 햄버거 패턴은 dx-kit sidebar의 자동 Sheet 모드에 맡기고 trigger만 layout 헤더에 노출하면 충분. 노트 상세 페이지는 "뒤로가기 동선 우선"이라 이번에 손대지 않음. 향후 노트 상세에서도 메뉴 진입이 필요해지면 별도 검토.
+- **사용자 피드백**: "인수인계 제대로 안하네" — 옳은 지적. 모바일 메뉴 갭이 이전 어느 메모리·히스토리에도 없었음. negative space 기록 룰이 부재했던 시스템 한계. 다음 세션 마크다운 재설계로 해결.
+
+---
+
 ## 🕒 Checkpoint — 2026-04-28 (문서 체계 재편: CLAUDE.md 추상화 + DESIGN/HISTORY 분리)
 
 **Current Milestone**: 운영 문서 인프라 리팩토링 — 프로젝트 무관 추상 모델과 프로젝트 고유 룰 분리, 누적 히스토리 컨벤션 확립.
