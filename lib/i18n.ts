@@ -139,9 +139,6 @@ const ko = {
   "settings.importCompleteNotes": "가져오기 완료: 노트 ",
   "settings.importCompleteCategories": "개, 카테고리 ",
   "settings.importCompleteUnit": "개",
-  "settings.shortcuts": "키보드 단축키",
-  "settings.editor": "에디터",
-  "settings.slashCommands": "슬래시 명령",
   "settings.language": "언어",
   "settings.languageDesc": "UI 표시 언어를 변경합니다",
   "settings.danger": "위험 구역",
@@ -172,43 +169,8 @@ const ko = {
   "common.delete": "삭제",
   "common.save": "저장",
 
-  // ── Shortcuts ──────────────────────────────────────
-  "shortcut.newBlock": "새 블록 추가",
-  "shortcut.deleteBlock": "빈 블록 삭제",
-  "shortcut.indent": "들여쓰기",
-  "shortcut.outdent": "내어쓰기",
-  "shortcut.prevBlock": "이전 블록으로 이동",
-  "shortcut.nextBlock": "다음 블록으로 이동",
-  "shortcut.slashMenu": "슬래시 명령 메뉴",
-
-  // ── Block Types ────────────────────────────────────
-  "block.text": "텍스트",
-  "block.heading": "제목",
-  "block.bullet": "불릿 리스트",
-  "block.numbered": "번호 리스트",
-  "block.todo": "할 일",
-  "block.divider": "구분선",
-  "block.quote": "인용",
-  "block.code": "코드",
-  "block.textDesc": "일반 텍스트 블록",
-  "block.headingDesc": "큰 제목",
-  "block.bulletDesc": "불릿 포인트 리스트",
-  "block.numberedDesc": "번호 매기기 리스트",
-  "block.todoDesc": "체크박스 리스트",
-  "block.dividerDesc": "수평 구분선",
-  "block.quoteDesc": "인용문 블록",
-  "block.codeDesc": "코드 블록",
-
   // ── Placeholders ───────────────────────────────────
-  "placeholder.text": "텍스트를 입력하세요...",
-  "placeholder.quote": "인용문",
-  "placeholder.todo": "할 일",
-  "placeholder.list": "리스트 항목",
-  "placeholder.code": "코드를 입력하세요",
   "placeholder.title": "제목 없음",
-  "placeholder.searchBlock": "블록 타입 검색...",
-  "block.addTitle": "블록 추가",
-  "block.noResult": "결과 없음",
 };
 
 const en: typeof ko = {
@@ -350,9 +312,6 @@ const en: typeof ko = {
   "settings.importCompleteNotes": "Import complete: ",
   "settings.importCompleteCategories": " notes, ",
   "settings.importCompleteUnit": " categories",
-  "settings.shortcuts": "Keyboard Shortcuts",
-  "settings.editor": "Editor",
-  "settings.slashCommands": "Slash Commands",
   "settings.language": "Language",
   "settings.languageDesc": "Change UI display language",
   "settings.danger": "Danger Zone",
@@ -383,43 +342,8 @@ const en: typeof ko = {
   "common.delete": "Delete",
   "common.save": "Save",
 
-  // ── Shortcuts ──────────────────────────────────────
-  "shortcut.newBlock": "Add new block",
-  "shortcut.deleteBlock": "Delete empty block",
-  "shortcut.indent": "Indent",
-  "shortcut.outdent": "Outdent",
-  "shortcut.prevBlock": "Previous block",
-  "shortcut.nextBlock": "Next block",
-  "shortcut.slashMenu": "Slash command menu",
-
-  // ── Block Types ────────────────────────────────────
-  "block.text": "Text",
-  "block.heading": "Heading",
-  "block.bullet": "Bullet List",
-  "block.numbered": "Numbered List",
-  "block.todo": "To-do",
-  "block.divider": "Divider",
-  "block.quote": "Quote",
-  "block.code": "Code",
-  "block.textDesc": "Plain text block",
-  "block.headingDesc": "Large heading",
-  "block.bulletDesc": "Bulleted list",
-  "block.numberedDesc": "Numbered list",
-  "block.todoDesc": "Checkbox list",
-  "block.dividerDesc": "Horizontal divider",
-  "block.quoteDesc": "Quote block",
-  "block.codeDesc": "Code block",
-
   // ── Placeholders ───────────────────────────────────
-  "placeholder.text": "Type something...",
-  "placeholder.quote": "Quote",
-  "placeholder.todo": "To-do",
-  "placeholder.list": "List item",
-  "placeholder.code": "Write code here",
   "placeholder.title": "Untitled",
-  "placeholder.searchBlock": "Search block type...",
-  "block.addTitle": "Add block",
-  "block.noResult": "No result",
 };
 
 export type TranslationKey = keyof typeof ko;

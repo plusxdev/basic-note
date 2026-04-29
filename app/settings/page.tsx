@@ -6,7 +6,6 @@ import {
   Download,
   Upload,
   Lock,
-  Keyboard,
   Shield,
   KeyRound,
   Copy,
@@ -19,7 +18,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@minnjii/dx-kit/ui/card";
 import { Button } from "@minnjii/dx-kit/ui/button";
 import { Input } from "@minnjii/dx-kit/ui/input";
-import { Label } from "@minnjii/dx-kit/ui/label";
 import {
   Select,
   SelectContent,
@@ -28,12 +26,11 @@ import {
   SelectValue,
 } from "@minnjii/dx-kit/ui/select";
 import { Separator } from "@minnjii/dx-kit/ui/separator";
-import { Kbd } from "@minnjii/dx-kit/ui/kbd";
 import { useCrypto } from "@/components/providers/crypto-provider";
 import { useLanguage } from "@/components/providers/language-provider";
 import type { Language } from "@/lib/i18n";
 import { db } from "@/lib/db";
-import type { Category, Note, Block } from "@/lib/types";
+import type { Category, Note } from "@/lib/types";
 import { resetEverything } from "@/lib/reset";
 import {
   AlertDialog,
@@ -48,12 +45,21 @@ import {
 
 // ─── Export / Import Types ───────────────────────────────────
 interface ExportData {
-  version: 1;
+  version: 2;
   exportedAt: string;
   categories: (Omit<Category, "name"> & { name: string })[];
   notes: (Omit<Note, "title"> & { title: string })[];
-  blocks: (Omit<Block, "content"> & { content: string })[];
 }
+
+// v1 백업 파일 import 호환 — blocks 필드는 무시.
+interface LegacyImportV1 {
+  version: 1;
+  exportedAt: string;
+  categories: ExportData["categories"];
+  notes: ExportData["notes"];
+  blocks?: unknown[];
+}
+type ImportData = ExportData | LegacyImportV1;
 
 export default function SettingsPage() {
   const {
@@ -75,28 +81,6 @@ export default function SettingsPage() {
     { value: "15", label: t("timeout.15") },
     { value: "30", label: t("timeout.30") },
     { value: "0", label: t("timeout.0") },
-  ];
-
-  // ─── Keyboard Shortcuts ──────────────────────────────────────
-  const SHORTCUTS = [
-    { keys: ["Enter"], desc: t("shortcut.newBlock") },
-    { keys: ["Backspace"], desc: t("shortcut.deleteBlock") },
-    { keys: ["Tab"], desc: t("shortcut.indent") },
-    { keys: ["Shift", "Tab"], desc: t("shortcut.outdent") },
-    { keys: ["\u2191"], desc: t("shortcut.prevBlock") },
-    { keys: ["\u2193"], desc: t("shortcut.nextBlock") },
-    { keys: ["/"], desc: t("shortcut.slashMenu") },
-  ];
-
-  const SLASH_COMMANDS = [
-    { command: "/p", desc: t("block.text") },
-    { command: "/h", desc: t("block.heading") },
-    { command: "/b", desc: t("block.bullet") },
-    { command: "/n", desc: t("block.numbered") },
-    { command: "/t", desc: t("block.todo") },
-    { command: "/d", desc: t("block.divider") },
-    { command: "/q", desc: t("block.quote") },
-    { command: "/c", desc: t("block.code") },
   ];
 
   const [exporting, setExporting] = useState(false);
@@ -212,10 +196,9 @@ export default function SettingsPage() {
   const handleExport = useCallback(async () => {
     setExporting(true);
     try {
-      const [categories, notes, blocks] = await Promise.all([
+      const [categories, notes] = await Promise.all([
         db.categories.filter((c) => !c.deletedAt).toArray(),
         db.notes.filter((n) => !n.deletedAt).toArray(),
-        db.blocks.filter((b) => !b.deletedAt).toArray(),
       ]);
 
       const decryptedCategories = await Promise.all(
@@ -232,19 +215,11 @@ export default function SettingsPage() {
         }))
       );
 
-      const decryptedBlocks = await Promise.all(
-        blocks.map(async (block) => ({
-          ...block,
-          content: block.content ? await decryptText(block.content) : "",
-        }))
-      );
-
       const exportData: ExportData = {
-        version: 1,
+        version: 2,
         exportedAt: new Date().toISOString(),
         categories: decryptedCategories,
         notes: decryptedNotes,
-        blocks: decryptedBlocks,
       };
 
       const blob = new Blob([JSON.stringify(exportData, null, 2)], {
@@ -276,9 +251,9 @@ export default function SettingsPage() {
       setImporting(true);
       try {
         const text = await file.text();
-        const data: ExportData = JSON.parse(text);
+        const data: ImportData = JSON.parse(text);
 
-        if (data.version !== 1) {
+        if (data.version !== 1 && data.version !== 2) {
           toast.error(t("settings.importBadFormat"));
           return;
         }
@@ -301,15 +276,6 @@ export default function SettingsPage() {
             updatedAt: now,
           };
           await db.notes.put(encrypted);
-        }
-
-        for (const block of data.blocks) {
-          const encrypted: Block = {
-            ...block,
-            content: await encryptText(block.content),
-            updatedAt: now,
-          };
-          await db.blocks.put(encrypted);
         }
 
         toast.success(
@@ -548,51 +514,6 @@ export default function SettingsPage() {
               className="hidden"
               onChange={handleImport}
             />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Keyboard Shortcuts ────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Keyboard className="h-4 w-4" />
-            {t("settings.shortcuts")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <div className="grid gap-3">
-            <p className="text-sm font-medium text-muted-foreground">{t("settings.editor")}</p>
-            {SHORTCUTS.map(({ keys, desc }) => (
-              <div
-                key={desc}
-                className="flex items-center justify-between text-sm"
-              >
-                <span>{desc}</span>
-                <div className="flex items-center gap-1">
-                  {keys.map((k) => (
-                    <Kbd key={k}>{k}</Kbd>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <Separator />
-
-          <div className="grid gap-3">
-            <p className="text-sm font-medium text-muted-foreground">
-              {t("settings.slashCommands")}
-            </p>
-            {SLASH_COMMANDS.map(({ command, desc }) => (
-              <div
-                key={command}
-                className="flex items-center justify-between text-sm"
-              >
-                <span>{desc}</span>
-                <Kbd>{command}</Kbd>
-              </div>
-            ))}
           </div>
         </CardContent>
       </Card>
