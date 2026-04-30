@@ -70,7 +70,12 @@ export function NoteList({
     <div className="grid gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{displayTitle} <span className="text-[22px]">({notes.length})</span></h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {displayTitle}
+            {!isLoading && (
+              <span className="text-[22px]"> ({notes.length})</span>
+            )}
+          </h1>
         </div>
         <div className="flex items-center gap-2">
           {categoryId && (

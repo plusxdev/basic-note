@@ -25,26 +25,50 @@ export function useNotes(categoryId?: string | null) {
     if (!isUnlocked) decryptCacheRef.current.clear();
   }, [isUnlocked]);
 
-  const rawNotes = useLiveQuery(
+  const queryKey = categoryId ?? null;
+
+  // Wrap the result with the queryKey it was computed for. When categoryId
+  // changes, useLiveQuery briefly keeps the previous value before the new
+  // query resolves; comparing rawResult.key against the current queryKey lets
+  // us detect that "stale" window without a separate setState-in-effect.
+  const rawResult = useLiveQuery(
     async () => {
       const all = await db.notes.orderBy("updatedAt").reverse().toArray();
       const active = all.filter((n) => !n.deletedAt);
-      const filtered = (categoryId !== undefined && categoryId !== null)
-        ? active.filter((n) => n.categoryId === categoryId)
-        : active;
+      const filtered =
+        categoryId !== undefined && categoryId !== null
+          ? active.filter((n) => n.categoryId === categoryId)
+          : active;
       const pinned = filtered.filter((n) => n.pinned);
       const unpinned = filtered.filter((n) => !n.pinned);
-      return [...pinned, ...unpinned];
+      return { key: queryKey, notes: [...pinned, ...unpinned] };
     },
     [categoryId]
   );
 
-  const notes = useLiveQuery(
-    async () => {
-      if (!isUnlocked || !rawNotes || rawNotes.length === 0) return [];
+  const rawNotes = rawResult?.notes;
+  const fetchedKey = rawResult?.key;
 
+  // Async decryption result, tagged with the key it was computed for so we
+  // can ignore stale results after categoryId switches.
+  const [decrypted, setDecrypted] = useState<
+    { key: string | null; notes: DecryptedNote[] } | undefined
+  >(undefined);
+
+  useEffect(() => {
+    if (
+      !isUnlocked ||
+      !rawNotes ||
+      rawNotes.length === 0 ||
+      fetchedKey === undefined
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    const targetKey = fetchedKey;
+    (async () => {
       const cache = decryptCacheRef.current;
-
       const cachedDecrypt = async (ciphertext: string): Promise<string> => {
         const hit = cache.get(ciphertext);
         if (hit !== undefined) return hit;
@@ -53,13 +77,15 @@ export function useNotes(categoryId?: string | null) {
         return text;
       };
 
-      const decrypted = await Promise.all(
+      const result = await Promise.all(
         rawNotes.map(async (note) => {
           let decryptedTitle = "";
           let preview = "";
           try {
             const title = await cachedDecrypt(note.title);
-            decryptedTitle = looksLikeCiphertext(title) ? tr("lock.decryptFail") : title;
+            decryptedTitle = looksLikeCiphertext(title)
+              ? tr("lock.decryptFail")
+              : title;
           } catch (e) {
             decryptedTitle = isLockError(e) ? "" : tr("lock.decryptFail");
           }
@@ -93,33 +119,34 @@ export function useNotes(categoryId?: string | null) {
           return { ...note, decryptedTitle, preview } as DecryptedNote;
         })
       );
-      return decrypted;
-    },
-    [rawNotes, isUnlocked]
-  );
 
-  // useLiveQuery는 deps 변경 직후에도 이전 결과를 그대로 유지한다. 그래서
-  // categoryId가 바뀐 순간 UI는 이전 카테고리의 결과로 empty 여부를 먼저
-  // 판단해버린다. 마지막으로 도착한 결과가 어느 key에 대한 것인지 별도로
-  // 추적해서, 아직 새 결과가 오지 않았으면 명시적으로 로딩 상태로 다룬다.
-  const currentKey = isUnlocked ? (categoryId ?? null) : undefined;
-  const [fetchedKey, setFetchedKey] = useState<string | null | undefined>(
-    currentKey
-  );
-  useEffect(() => {
-    if (rawNotes !== undefined && fetchedKey !== currentKey) {
-      setFetchedKey(currentKey);
-    }
-  }, [rawNotes, currentKey, fetchedKey]);
+      if (!cancelled) setDecrypted({ key: targetKey, notes: result });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rawNotes, fetchedKey, isUnlocked, decryptText]);
+
+  const currentKey = isUnlocked ? queryKey : undefined;
+
+  // Derived. Don't expose stale decryptions whose key doesn't match the
+  // current one (race after categoryId switch).
+  const notes: DecryptedNote[] | undefined = !isUnlocked
+    ? []
+    : !rawNotes
+    ? undefined
+    : rawNotes.length === 0
+    ? []
+    : decrypted && decrypted.key === fetchedKey
+    ? decrypted.notes
+    : undefined;
 
   const isLoading =
     isUnlocked &&
-    (rawNotes === undefined ||
+    (rawResult === undefined ||
       fetchedKey !== currentKey ||
-      notes === undefined ||
-      // rawNotes가 도착했는데 decryption 결과인 notes가 아직 이전 빈 결과를
-      // 유지하고 있는 중간 상태도 로딩으로 친다.
-      (rawNotes.length > 0 && notes.length === 0));
+      notes === undefined);
 
   const createNote = useCallback(
     async (categoryId: string | null = null): Promise<string | null> => {
@@ -191,14 +218,17 @@ export function useNotes(categoryId?: string | null) {
     if (updated) syncPushEntity("note", updated);
   }, []);
 
-  const moveToCategory = useCallback(async (noteId: string, categoryId: string | null) => {
-    await db.notes.update(noteId, {
-      categoryId,
-      updatedAt: Date.now(),
-    });
-    const updated = await db.notes.get(noteId);
-    if (updated) syncPushEntity("note", updated);
-  }, []);
+  const moveToCategory = useCallback(
+    async (noteId: string, categoryId: string | null) => {
+      await db.notes.update(noteId, {
+        categoryId,
+        updatedAt: Date.now(),
+      });
+      const updated = await db.notes.get(noteId);
+      if (updated) syncPushEntity("note", updated);
+    },
+    []
+  );
 
   return {
     notes: notes ?? [],

@@ -1,7 +1,14 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
+
+// Module-level cache so the decrypted category list survives across page
+// remounts (e.g. clicking from /notes to /notes/categories/[id] mounts a new
+// page component but the user already had a populated sidebar). Without this
+// the category title flashes the "카테고리" placeholder before the async
+// decrypt resolves. Cleared when any consumer observes isUnlocked=false.
+let decryptedCategoriesCache: Category[] | undefined = undefined;
 import { nanoid } from "nanoid";
 import { db } from "@/lib/db";
 import { useCrypto } from "@/components/providers/crypto-provider";
@@ -20,7 +27,11 @@ function buildTree(
   const roots: CategoryTreeNode[] = [];
 
   for (const cat of categories) {
-    map.set(cat.id, { ...cat, children: [], noteCount: noteCounts[cat.id] ?? 0 });
+    map.set(cat.id, {
+      ...cat,
+      children: [],
+      noteCount: noteCounts[cat.id] ?? 0,
+    });
   }
 
   for (const cat of categories) {
@@ -38,19 +49,34 @@ function buildTree(
 export function useCategories() {
   const { encryptText, decryptText, isUnlocked } = useCrypto();
 
-  const rawCategories = useLiveQuery(
-    async () => {
-      const all = await db.categories.orderBy("sortOrder").toArray();
-      return all.filter((c) => !c.deletedAt);
-    },
-    []
-  );
+  const rawCategories = useLiveQuery(async () => {
+    const all = await db.categories.orderBy("sortOrder").toArray();
+    return all.filter((c) => !c.deletedAt);
+  }, []);
 
-  // Decrypt category names
-  const categories = useLiveQuery(
-    async () => {
-      if (!isUnlocked || !rawCategories || rawCategories.length === 0) return [];
-      const decrypted = await Promise.all(
+  // Decrypt category names off the live DB result. Using useEffect+state
+  // (with a cancel flag) instead of a nested useLiveQuery: the second query
+  // wasn't reading from Dexie, only transforming rawCategories.
+  // Initial value seeds from the module-level cache so a freshly mounted page
+  // (e.g. after navigation) gets the previous decrypted list immediately.
+  const [decryptedCategories, setDecryptedCategories] = useState<
+    Category[] | undefined
+  >(decryptedCategoriesCache);
+
+  // Invalidate the cache when the app locks. Done in a separate effect so
+  // unlock cycles always start from a clean slate (different cryptoKey).
+  useEffect(() => {
+    if (!isUnlocked) {
+      decryptedCategoriesCache = undefined;
+    }
+  }, [isUnlocked]);
+
+  useEffect(() => {
+    if (!isUnlocked || !rawCategories || rawCategories.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const result = await Promise.all(
         rawCategories.map(async (cat) => {
           try {
             const name = await decryptText(cat.name);
@@ -59,30 +85,45 @@ export function useCategories() {
             }
             return { ...cat, name };
           } catch (e) {
-            return { ...cat, name: isLockError(e) ? "" : tr("lock.decryptFail") };
+            return {
+              ...cat,
+              name: isLockError(e) ? "" : tr("lock.decryptFail"),
+            };
           }
         })
       );
-      return decrypted;
-    },
-    [rawCategories, isUnlocked]
-  );
-
-  // Note counts per category
-  const noteCounts = useLiveQuery(
-    async () => {
-      const all = await db.notes.toArray();
-      const notes = all.filter((n) => !n.deletedAt);
-      const counts: Record<string, number> = {};
-      for (const note of notes) {
-        if (note.categoryId) {
-          counts[note.categoryId] = (counts[note.categoryId] ?? 0) + 1;
-        }
+      if (!cancelled) {
+        decryptedCategoriesCache = result;
+        setDecryptedCategories(result);
       }
-      return counts;
-    },
-    []
-  );
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rawCategories, isUnlocked, decryptText]);
+
+  // While rawCategories is undefined (first sub-millisecond after mount),
+  // fall back to the cached decrypted list so the UI doesn't flash.
+  const categories: Category[] | undefined = !isUnlocked
+    ? []
+    : !rawCategories
+    ? decryptedCategories
+    : rawCategories.length === 0
+    ? []
+    : decryptedCategories;
+
+  const noteCounts = useLiveQuery(async () => {
+    const all = await db.notes.toArray();
+    const notes = all.filter((n) => !n.deletedAt);
+    const counts: Record<string, number> = {};
+    for (const note of notes) {
+      if (note.categoryId) {
+        counts[note.categoryId] = (counts[note.categoryId] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, []);
 
   const tree = categories && noteCounts ? buildTree(categories, noteCounts) : [];
 
@@ -93,12 +134,19 @@ export function useCategories() {
       noteCounts === undefined);
 
   const createCategory = useCallback(
-    async (name: string, parentId: string | null = null, icon: string | null = null) => {
+    async (
+      name: string,
+      parentId: string | null = null,
+      icon: string | null = null
+    ) => {
       if (!isUnlocked) return null;
 
       const all = await db.categories.orderBy("sortOrder").toArray();
-      const siblings = all.filter((c) => c.parentId === parentId && !c.deletedAt);
-      const lastOrder = siblings.length > 0 ? siblings[siblings.length - 1].sortOrder : null;
+      const siblings = all.filter(
+        (c) => c.parentId === parentId && !c.deletedAt
+      );
+      const lastOrder =
+        siblings.length > 0 ? siblings[siblings.length - 1].sortOrder : null;
 
       const now = Date.now();
       const encryptedName = await encryptText(name);
@@ -122,7 +170,14 @@ export function useCategories() {
   );
 
   const updateCategory = useCallback(
-    async (id: string, updates: { name?: string; icon?: string | null; parentId?: string | null }) => {
+    async (
+      id: string,
+      updates: {
+        name?: string;
+        icon?: string | null;
+        parentId?: string | null;
+      }
+    ) => {
       if (!isUnlocked) return;
 
       const patch: Partial<Category> = { updatedAt: Date.now() };
@@ -185,7 +240,10 @@ export function useCategories() {
     });
     const deletedCat = await db.categories.get(id);
     if (deletedCat) syncPushEntity("category", deletedCat);
-    const deletedNotes = await db.notes.where("categoryId").equals(id).toArray();
+    const deletedNotes = await db.notes
+      .where("categoryId")
+      .equals(id)
+      .toArray();
     for (const note of deletedNotes) {
       syncPushEntity("note", note);
     }
