@@ -36,6 +36,17 @@ import {
   startAutoSync,
   stopAutoSync,
 } from "@/lib/sync/engine";
+import {
+  saveSession,
+  loadSession,
+  clearSession,
+} from "@/lib/crypto-session";
+import { migrateData } from "@/lib/migrate-master-key";
+import {
+  CRYPTO_BROADCAST_CHANNEL,
+  type CryptoBroadcastMessage,
+} from "@/lib/crypto-broadcast";
+import { useIdleAutoLock } from "@/hooks/use-idle-auto-lock";
 
 interface CryptoContextValue {
   isSetup: boolean;
@@ -56,105 +67,12 @@ interface CryptoContextValue {
   dismissRecoveryKey: () => void;
 }
 
-const SESSION_PW_KEY = "bn_session_pw";
-const SESSION_TS_KEY = "bn_session_ts";
-
-function saveSession(password: string) {
-  try {
-    sessionStorage.setItem(SESSION_PW_KEY, password);
-    sessionStorage.setItem(SESSION_TS_KEY, String(Date.now()));
-  } catch {}
-}
-
-function loadSession(timeoutMinutes: number): string | null {
-  try {
-    if (timeoutMinutes === 0) return null;
-    const pw = sessionStorage.getItem(SESSION_PW_KEY);
-    const ts = sessionStorage.getItem(SESSION_TS_KEY);
-    if (!pw || !ts) return null;
-    const elapsed = Date.now() - Number(ts);
-    if (elapsed > timeoutMinutes * 60 * 1000) {
-      clearSession();
-      return null;
-    }
-    return pw;
-  } catch {
-    return null;
-  }
-}
-
-function clearSession() {
-  try {
-    sessionStorage.removeItem(SESSION_PW_KEY);
-    sessionStorage.removeItem(SESSION_TS_KEY);
-  } catch {}
-}
-
-const CRYPTO_BROADCAST_CHANNEL = "bn_crypto";
-
-type CryptoBroadcastMessage = {
-  type: "setup" | "unlock" | "lock" | "reset";
-  /** Sender's current encryptedMasterKey. Receiver can skip locking when it
-   *  already holds the same wrapper, avoiding needless re-unlock prompts. */
-  wrapper?: string;
-};
-
 const CryptoContext = createContext<CryptoContextValue | null>(null);
-
-// ─── Migration: re-encrypt all data from old key to new master key ──
-
-async function migrateData(
-  oldKey: CryptoKey,
-  masterKey: CryptoKey
-) {
-  const categories = await db.categories.toArray();
-  const notes = await db.notes.toArray();
-
-  // Decrypt with old key; skip items that fail so we don't re-encrypt ciphertext
-  const encCats: typeof categories = [];
-  for (const c of categories) {
-    if (!c.name) {
-      encCats.push({ ...c, name: "" });
-      continue;
-    }
-    try {
-      const plain = await decrypt(oldKey, c.name);
-      encCats.push({ ...c, name: await encrypt(masterKey, plain) });
-    } catch {
-      // Leave as-is; surfaces as "(복호화 실패)" in UI instead of corrupting further
-    }
-  }
-
-  const encNotes: typeof notes = [];
-  for (const n of notes) {
-    const next = { ...n };
-    if (n.title) {
-      try {
-        next.title = await encrypt(masterKey, await decrypt(oldKey, n.title));
-      } catch {}
-    }
-    if (n.content) {
-      try {
-        next.content = await encrypt(
-          masterKey,
-          await decrypt(oldKey, n.content)
-        );
-      } catch {}
-    }
-    encNotes.push(next);
-  }
-
-  await db.transaction("rw", db.categories, db.notes, async () => {
-    if (encCats.length) await db.categories.bulkPut(encCats);
-    if (encNotes.length) await db.notes.bulkPut(encNotes);
-  });
-}
 
 export function CryptoProvider({ children }: { children: ReactNode }) {
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingRecoveryKey, setPendingRecoveryKey] = useState<string | null>(null);
-  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoUnlockAttempted = useRef(false);
   // Wrapper this cryptoKey was unwrapped from. If settings.encryptedMasterKey
   // later diverges (e.g., another tab re-keyed), our cryptoKey is stale.
@@ -295,31 +213,16 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ── Idle auto-lock ──────────────────────────────────────────
-  const resetIdleTimer = useCallback(() => {
-    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    if (!cryptoKey) return;
-    try {
-      const pw = sessionStorage.getItem(SESSION_PW_KEY);
-      if (pw) sessionStorage.setItem(SESSION_TS_KEY, String(Date.now()));
-    } catch {}
-
-    const timeout = settings?.lockTimeoutMinutes ?? DEFAULT_LOCK_TIMEOUT_MINUTES;
-    idleTimerRef.current = setTimeout(() => {
+  // Soft-lock only: clear local key + session. Doesn't broadcast or stop
+  // autoSync — those belong to the explicit lock() path.
+  useIdleAutoLock({
+    enabled: !!cryptoKey,
+    timeoutMinutes: settings?.lockTimeoutMinutes,
+    onTimeout: () => {
       clearSession();
       setCryptoKey(null);
-    }, timeout * 60 * 1000);
-  }, [cryptoKey, settings?.lockTimeoutMinutes]);
-
-  useEffect(() => {
-    if (!cryptoKey) return;
-    const events = ["mousedown", "keydown", "touchstart", "scroll"];
-    events.forEach((e) => window.addEventListener(e, resetIdleTimer));
-    resetIdleTimer();
-    return () => {
-      events.forEach((e) => window.removeEventListener(e, resetIdleTimer));
-      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    };
-  }, [cryptoKey, resetIdleTimer]);
+    },
+  });
 
   // ── Setup (first time) ─────────────────────────────────────
   const setup = useCallback(async (password: string) => {
