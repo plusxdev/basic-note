@@ -4,6 +4,59 @@
 
 ---
 
+## 🕒 Checkpoint — 2026-05-04 (인수인계 시스템 보강 + R1 리팩토링 완주 + R2 PWA로 결정)
+
+**Current Milestone**: Known Gaps 슬롯 도입으로 인수인계 시스템 보강 → R1 전체 4개 서브 완주 → R2 진입 시점에 PWA 이미 완비 상태 발견(negative space) → Tauri 백로그 제거. 4개 prod 푸시.
+
+**Key Achievements**
+
+- **인수인계 시스템 보강 (`c045485`)** — `CLAUDE.md` 세션 시작 프로토콜·종료 룰·HISTORY 템플릿에 Known Gaps (Negative Space) 슬롯 추가. "변경된 것"이 아니라 "원래 없었던 것"을 기록하는 영역. 이 세션에서 즉시 효과 발휘(R2의 PWA 이미 완비 발견 인계 가능).
+
+- **R1.1 테스트 인프라 (`b07388d`)** — vitest 4 devDep + `vitest.config.ts` + `npm test` 스크립트. `lib/crypto.test.ts` 18 케이스 (encrypt/decrypt round-trip, IV 랜덤성, 잘못된 키 거부, 마스터키 export·wrap·unwrap, recovery key 형식 8그룹×4hex, createMasterKeySetup→verifyAndUnwrapMasterKey end-to-end, recoverMasterKey, rewrapMasterKey, verifyPasswordLegacy). `lib/fractional-index.test.ts` 10 케이스 (정렬 키 생성·삽입·경계 보정·50회 deep insertion 무충돌). 28 통과 / 1.17초.
+
+- **R1.2 useLiveQuery 중첩 정리 + 마운트 race 보강 (`e1562d1`)** — useNotes/useCategories의 두 번째 useLiveQuery(복호화 변환)를 useState+useEffect (cancelled flag) 패턴으로 교체. `set-state-in-effect` 룰 회피 위해 동기 분기는 derived 변수로 분리. useNotes는 rawResult를 `{key, notes}`로 wrap해 categoryId 전환 race를 setState-in-effect 없이 처리. useCategories는 페이지 마운트 race(카테고리명 placeholder 깜빡임)를 module-level `decryptedCategoriesCache`로 해소(잠금 시 invalidate). NoteList 헤더 카운트 `(N)`은 isLoading 동안 숨김.
+
+- **R1.3 sync 분리 (이미 완료 인지)** — `lib/sync/engine.ts` 한 파일에 push/pull/realtime/cursor/auto-sync 모두 응집 잘 돼있어 추가 분리 가치 적음. 별도 작업 없이 done 처리.
+
+- **R1.4 crypto-provider 분할 (`a563e95`)** — 632 → 535줄 (-97). 응집도별 추출: `lib/crypto-session.ts` (saveSession/loadSession/clearSession + touchSessionTimestamp), `lib/migrate-master-key.ts` (legacy → master key 재암호화), `lib/crypto-broadcast.ts` (CRYPTO_BROADCAST_CHANNEL 상수 + CryptoBroadcastMessage 타입), `hooks/use-idle-auto-lock.ts` (idle timer + activity event listener를 hook으로, ref-during-render 룰 회피용 useEffect로 onTimeoutRef 갱신). Provider 본체 동작 동일성 보존(soft-lock = broadcast/stopAutoSync 없음 의도 유지).
+
+- **R2 PWA 진입 → 이미 완비 발견** — manifest.json (standalone, icon 192/512 maskable), sw.js (precache `/`/`/notes`, navigate=network-first, 정적 자산=cache-first, Supabase=always-network), apple-touch-icon, sw-register(prod-only) 모두 prod에서 살아있음. iOS Safari/Chrome/Sonoma Safari 즉시 설치 가능. Tauri는 백로그 제거(앱스토어 정식 배포 욕심날 때만 재검토).
+
+- **선결 검증** — Dexie v2 마이그레이션 데스크탑·모바일 양쪽 정상(데스크탑 IndexedDB 버전 20 직접 확인, 모바일 정상 동작 확인). `bn_decrypt_fail_log` null(실전 0건). 진단 인프라는 두고 감.
+
+**Pending Tasks**
+
+- 카운트 `(N)` 깜빡임 — useNotes의 마운트 race. R1.2의 known issue. layout context로 노트 수 한 번만 fetch하면 자연 해소. 사용자 호소 시 우선.
+- crypto-provider.tsx 535줄 추가 분할 — settings 로드/auto-unlock/external re-key 감지/cross-tab broadcast 4개 useEffect가 cryptoKey state·settings에 강결합. 단독 분할은 prop drilling 비용 큼. 새 lifecycle 추가 시 함께 손대는 식.
+- 앱 이름 정리 — manifest/메타가 "basic note", 메모리/대화에선 SecureNote. 사용자 결정 필요.
+
+**Known Gaps** (Negative Space)
+
+- **PWA 이미 완비 상태가 인계되지 않음** — 이번 세션에 Known Gaps 슬롯이 없었다면 Tauri 정식 진입했을 가능성. 발견 후 R2 결정 즉시 변경. *원래 없었던 것이 아니라 *원래 있었는데 인지 못 한 것*에 가까움 — 갭 정의를 "현 상태 인지 누락"까지 확장 적용함.
+- 단축키 표시·하이라이트·이미지 등 에디터 기능은 "원래 없는" 상태로 백로그에 살아있음(이전 체크포인트의 UX 큐). negative space로 새로 잡지 않음(이미 인지된 미결).
+
+**Technical Decisions**
+
+- **Tauri 백로그 제거** — PWA로 사용자 요구 충족 확인. Tauri는 앱스토어 정식 배포 욕심날 때만 재검토.
+- **비동기 hook 표준 패턴** — useState + useEffect (cancelled flag) + tagged async result(`{key, notes}`) + derived state. `set-state-in-effect` 룰 회피 위해 동기 분기는 derived로. 향후 비슷한 hook에 그대로 적용.
+- **module-level cache** — 페이지 마운트 race 보강용. `decryptedCategoriesCache`. 잠금(isUnlocked=false) 감지 시 invalidate 필수(cryptoKey rotation 안전). 글로벌 변수지만 "use client" hook이라 SSR 우려 없음.
+- **crypto-provider 분할 깊이 제한** — 단순 추출만. cryptoKey state·settings에 강결합된 useEffect/콜백은 분할 시 prop drilling 비용이 응집도 이득보다 큼. 응집도 우선 보존.
+- **vitest 환경** — `environment: "node"`. Node 25 webcrypto 최적화로 PBKDF2 600K iter 다수 호출에도 1.17초. 별도 jsdom 불필요.
+- **`useIdleAutoLock` ref 패턴** — onTimeout을 ref로 보관(deps 안정화), ref 갱신은 useEffect 안에서(react-hooks/refs 룰 회피). enabled/timeoutMinutes만 deps로.
+
+**Agent Notes**
+
+- **Director**: 한 세션에 4 커밋 / 4 prod 푸시(R1 통합 푸시 1회). 인수인계 시스템 보강이 즉시 효과를 본 첫 사례 — Known Gaps 슬롯이 없었으면 Tauri 본격 진입했을 것. 다음 세션은 새 기능 추가 vs 잔여 백로그 트리아지 모드. 카운트 깜빡임은 layout context 도입할 때 자연스럽게.
+- **Frontend**: hook 리팩토링 표준 패턴 정립. cancelled flag + tagged async result + derived state. crypto-provider 분할 패턴: 모듈 레벨 helper → 별도 파일, useEffect 덩어리 → hook, cryptoKey state·settings에 강결합된 부분은 응집도 보존. 미래 lifecycle 추가 시 그 부분도 함께 분할 검토.
+- **Backend(Sync)**: `lib/sync/engine.ts`가 이미 응집도 높아 추가 분리 가치 적다고 판정. 새 sync 시나리오(예: 다중 사용자) 추가 시 그 때 재검토. dev gate(`SYNC_ENABLED`)는 prod-leak 방지 핵심 — 절대 약화 금지.
+- **Designer/Publisher**: PWA 자산 완비 — apple-touch-icon, manifest standalone, theme-color 다크, sw-register prod-only. 추가 디자인 작업 0. 다만 manifest의 "basic note" name은 SecureNote와 불일치. 사용자 결정 후 확정.
+- **사용자 피드백**:
+  - "카테고리(0) 깜빡임" 회귀 즉시 보고 → A+B 옵션 합의 후 fix → 카운트 (2) 잔존 깜빡임 후속 보고 → "다 가본 다음 종합" 합의. 트레이드오프 즉석 이해도 높음.
+  - "tauri가 뭐냐 / pwa로도 아이콘 진입 가능하지 않냐" — 비기술 명료한 질문. PWA로 결정 즉시.
+  - 작업 전체에 "응" 페이스로 진행 승인. 길게 설명하면 줄여서 다시 요청 패턴.
+
+---
+
 ## 🕒 Checkpoint — 2026-04-29 (Phase 10-F 종결 + 모바일 진입점 + 인수인계 갭 인지)
 
 **Current Milestone**: 레거시 blocks 시스템 완전 제거. 모바일 사이드바 진입점 누락 보강. 메모리/히스토리 인수인계 시스템의 한계(negative space 미기록) 노출.
