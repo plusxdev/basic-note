@@ -4,6 +4,60 @@
 
 ---
 
+## 🕒 Checkpoint — 2026-05-06 (밤 세션: 에디터 기능 + 테마 토글 + 헤더 정리)
+
+**Current Milestone**: PlainEditor에 링크·하이라이트 추가, 다크/라이트/시스템 테마 토글 도입, 글로벌 헤더 탭 추출 + sidebar trigger md:hidden fix. 1 커밋(`24dea57`), prod 미배포.
+
+**Key Achievements**
+
+- **링크 활성화 (`24dea57`)** — PlainEditor에 `createLink`/`unlinkAtCaret`/`isLinkAtCaret` 핸들. URL 자동 인식(Space/Enter 시 직전 토큰이 URL이면 wrap), Cmd/Ctrl+클릭으로 새탭 열기, `target=_blank rel=noopener noreferrer` 강제. 툴바 링크 버튼 — 캐럿이 링크 위면 unlink, 아니면 prompt URL 입력. `--link` 토큰 도입(라이트 #0066cc, 다크 #00d2ff). contentEditable 안 anchor는 평소 `cursor: text`, 모디파이어 누른 동안만 pointer(window keydown/keyup 리스너로 `data-mod` 토글).
+
+- **하이라이트(형광펜) (`24dea57`)** — `mark.bn-highlight` wrap/unwrap 토글. `range.surroundContents` → 경계 가로지르면 `extractContents` fallback. 색은 라이트/다크 무관 단일 `#ffe040` + 글자색 강제 `#000`. 사용자 직접 색 결정(불투명 + 검정 글자가 형광펜 표준 멘탈모델).
+
+- **다크/라이트/시스템 테마 토글 (`24dea57`)** — root `<html>`의 `dark` 하드코드 제거, `next-themes ThemeProvider`(`attribute="class"`, `defaultTheme="dark"`, `enableSystem`) 연결. settings에 라이트/다크/시스템 셀렉터(SSR 안전 `mounted` 가드). 기존 사용자 시각 변화 없음(default=dark).
+
+- **단축키 가이드 카드 (`24dea57`)** — settings에 키보드 단축키 카드 신설. 6행: Bold/Italic/Underline/Undo/Redo + 에디터 내 링크 열기(Cmd+클릭). Mac/Windows 모디파이어 키 자동 분기(`navigator.userAgent`).
+
+- **글로벌 헤더 탭 + SidebarTrigger 정리 (`24dea57`)** — 3개 탭 네비를 `components/layout/global-nav-tabs.tsx`로 추출, notes/settings layout 공유. SidebarTrigger 정렬: 1번(사이드바 안) `mt-[0.5px]`, 2번(콘텐츠 헤더) `mt-[3px]`. dx-kit `.inline-flex` 후행 정의 때문에 `md:hidden`이 무력화되는 이슈를 `<span className="contents md:hidden">` wrapper로 회피.
+
+- **노트 상세 우측 정렬 (`24dea57`)** — 1080 이하 우측 여백 시각 비대칭. `... 메뉴` + `날짜 버튼`에 `translate-x-[13px]`. 좌측 "← 뒤로" 버튼 변경 없음.
+
+**Pending Tasks**
+
+- 다중 노트 선택/일괄 작업, 헤딩 현재 상태 표시(caret 위치의 H1/H2/H3 툴바 반영), 자동 백업/버전 히스토리 — 우선순위 낮음.
+- crypto-provider.tsx 추가 분할 — 신규 lifecycle 추가 시 함께.
+
+**Known Gaps** (Negative Space)
+
+- **라이트 모드 디자인 미검증** — 토글만 붙였고, 라이트에서 톤·대비 깨지는 화면은 직접 점검 안 함. 다음 세션 우선 큐.
+- **`<meta name="theme-color" content="#09090b">` 다크색 하드코드** — 라이트 모드 PWA 상단 색 어색 가능. 동적 분기 필요시.
+- **dx-kit 후행 utility 충돌 패턴** — `.inline-flex` 외에 다른 utility도 충돌 가능성. 미래 비슷한 증상 시 `dx-kit/dist/dx-kit.css` 확인 후 contents wrapper 패턴.
+
+**Technical Decisions**
+
+- **사용자 명시 요청 없이 알파/투명도 임의 도입 금지** — 형광펜 사건에서 학습. 다크모드 contrast 걱정으로 alpha 도입하면 본문 배경과 섞여 칙칙해짐. 모드 무관 강제 색(예: `color: #000`) 패턴이 더 자연스러움. 메모리에 박힘.
+- **시각 디테일은 토스 전 직접 점검 (강화)** — 색·커서·호버는 코드 작성 후 사용자 토스 *전*에 본인이 점검. 검증 못 하면 명시적으로 "검증 못 함" 고지하고 토스. 메모리에 박힘(`feedback_visual_check.md`).
+- **한국어 존댓말 룰** — 모든 대화 응답에 존댓말. 메모리에 박힘(`feedback_tone.md`).
+- **dx-kit utility 충돌 회피 패턴** — `<span className="contents md:hidden">` wrapper. dx-kit 후행 base 룰을 회피하면서 layout 영향 0.
+- **공통 UI 컴포넌트 추출 = layout context 패턴 확장** — `GlobalNavTabs` 추출은 이전 `NotesCountProvider` 패턴의 또 다른 사례(공유 UI를 layout 단위로 응집).
+
+**Agent Notes**
+
+- **Director**: 1 커밋(`24dea57`, 10 files +471/-56), prod 미배포. 사용자 검증 후 push 예정. 본래 5묶음 분할 제안했으나 파일 교차로 비용 컸음 → 단일 commit + 메시지 분리로 git log 가독성 보완.
+- **Frontend**: PlainEditor에 링크·하이라이트 패턴 정립. `mark` 태그 wrap 시 `surroundContents` → `extractContents` fallback 패턴은 다른 인라인 wrap(예: 미래 색상 변경)에 재사용 가능. `URL_TRAILING_RE`는 추가 토큰(이메일·멘션) 인식 시 확장 포인트.
+- **Designer/Publisher**: `--link`, `--highlight` 토큰화로 미래 색 변경은 globals.css 한 줄로 가능. 라이트 모드 톤 검증 다음 세션 우선.
+- **사용자 피드백**:
+  - "왜 반말이야?" — 존댓말 룰 즉시 메모리화.
+  - "진작에 이렇게 해야지" (링크 색·커서) — 시각 디테일 토스 전 점검 룰 강화.
+  - "알파값 만졌지?" — 형광펜은 불투명 + 검정 글자. 임의 alpha 도입 금지 룰.
+  - "처음으로 돌려봐" → "그냥 이렇게하자" — 베이스라인에서 다시 판단하려는 신호 인지.
+  - "뭔짓이지" — 한 종류 버튼만 만지라는 명확한 표현.
+  - "확대하면 1,2번 얼라인 안 맞음" — 다른 부모 컨테이너 baseline 차이 인지. 정공법보다 미세 보정 선호.
+  - "피씨 1500인데 보임" — 라이브러리 후행 utility 충돌 인지. 빠른 fix 받음.
+- **환경**: Node v25.8.1 (PATH `/opt/homebrew/bin` prefix 필수). dev :3003 살아있음(PID 90108). prod push 미실행.
+
+---
+
 ## 🕒 Checkpoint — 2026-05-06 (준비완료 신호 + 앱 이름 정리 + 카운트 깜빡임 다층 fix)
 
 **Current Milestone**: 세션 시작 프로토콜 보강 → 앱 이름(`basic note`) 통일 검증(코드 변경 0) → 카운트 `(N)` 깜빡임을 4단 층위로 fix(layout context + sessionStorage hot cache + 트리 노드 + 옛 cache 호환). 4 커밋 / 4 prod 푸시. prod 첫 hydration race는 한계로 수용.
