@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import {
   Download,
@@ -14,6 +15,7 @@ import {
   EyeOff,
   AlertTriangle,
   Trash2,
+  Keyboard,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@minnjii/dx-kit/ui/card";
 import { Button } from "@minnjii/dx-kit/ui/button";
@@ -73,6 +75,9 @@ export default function SettingsPage() {
   } = useCrypto();
 
   const { t, language, setLanguage } = useLanguage();
+  const { theme, setTheme } = useTheme();
+  const [themeMounted, setThemeMounted] = useState(false);
+  useEffect(() => setThemeMounted(true), []);
 
   // ─── Lock Timeout Options ────────────────────────────────────
   const TIMEOUT_OPTIONS = [
@@ -104,6 +109,14 @@ export default function SettingsPage() {
   const [showReset2, setShowReset2] = useState(false);
   const [resetInput, setResetInput] = useState("");
   const [resetting, setResetting] = useState(false);
+
+  // ── Platform-specific modifier label ─────────────────────
+  // SSR-safe: defaults to "Ctrl" on server, swaps to "⌘" on Mac after hydration.
+  const [modKey, setModKey] = useState("Ctrl");
+  useEffect(() => {
+    if (typeof navigator === "undefined") return;
+    if (/Mac|iPhone|iPad/.test(navigator.userAgent)) setModKey("⌘");
+  }, []);
 
   // ── Lock Timeout ─────────────────────────────────────────
   const handleTimeoutChange = useCallback(
@@ -427,6 +440,30 @@ export default function SettingsPage() {
 
           <Separator />
 
+          {/* Theme */}
+          <div className="flex items-center justify-between">
+            <div className="grid gap-1">
+              <p className="text-sm font-medium">{t("settings.theme")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.themeDesc")}</p>
+            </div>
+            <Select
+              value={themeMounted ? (theme ?? "system") : "system"}
+              onValueChange={(v) => setTheme(v)}
+              disabled={!themeMounted}
+            >
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="light">{t("settings.themeLight")}</SelectItem>
+                <SelectItem value="dark">{t("settings.themeDark")}</SelectItem>
+                <SelectItem value="system">{t("settings.themeSystem")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Separator />
+
           {/* Language */}
           <div className="flex items-center justify-between">
             <div className="grid gap-1">
@@ -459,6 +496,45 @@ export default function SettingsPage() {
               {t("settings.lockButton")}
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Keyboard Shortcuts ───────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Keyboard className="h-4 w-4" />
+            {t("settings.shortcuts")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ul className="grid gap-2.5 text-sm">
+            {[
+              { label: t("shortcuts.bold"), keys: [modKey, "B"] },
+              { label: t("shortcuts.italic"), keys: [modKey, "I"] },
+              { label: t("shortcuts.underline"), keys: [modKey, "U"] },
+              { label: t("shortcuts.undo"), keys: [modKey, "Z"] },
+              { label: t("shortcuts.redo"), keys: [modKey, "⇧", "Z"] },
+              { label: t("shortcuts.openLink"), keys: [modKey, t("shortcuts.click")] },
+            ].map((row) => (
+              <li
+                key={row.label}
+                className="flex items-center justify-between gap-3"
+              >
+                <span className="text-muted-foreground">{row.label}</span>
+                <span className="flex items-center gap-1">
+                  {row.keys.map((k, i) => (
+                    <kbd
+                      key={i}
+                      className="rounded-md border bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground"
+                    >
+                      {k}
+                    </kbd>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
         </CardContent>
       </Card>
 

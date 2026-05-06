@@ -61,7 +61,7 @@ export function AppSidebar() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
-          <SidebarTrigger className="shrink-0" />
+          <SidebarTrigger className="shrink-0 mt-[0.5px]" />
         </div>
       </SidebarHeader>
 

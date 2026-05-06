@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import { DbProvider } from "@/components/providers/db-provider";
 import { CryptoProvider } from "@/components/providers/crypto-provider";
@@ -36,7 +37,7 @@ export default function RootLayout({
   return (
     <html
       lang="ko"
-      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>
@@ -50,14 +51,21 @@ export default function RootLayout({
         />
       </head>
       <body className="h-full flex flex-col bg-background text-foreground overflow-hidden">
-        <SwRegister />
-        <DbProvider>
-          <LanguageProvider>
-            <CryptoProvider>
-              <AuthGate>{children}</AuthGate>
-            </CryptoProvider>
-          </LanguageProvider>
-        </DbProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <SwRegister />
+          <DbProvider>
+            <LanguageProvider>
+              <CryptoProvider>
+                <AuthGate>{children}</AuthGate>
+              </CryptoProvider>
+            </LanguageProvider>
+          </DbProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

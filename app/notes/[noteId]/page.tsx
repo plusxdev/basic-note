@@ -39,7 +39,7 @@ import {
 } from "@minnjii/dx-kit/ui/alert-dialog";
 import { useCategories } from "@/hooks/use-categories";
 import { useLanguage } from "@/components/providers/language-provider";
-import { ArrowLeft, MoreHorizontal, Trash2, Pin, PinOff, FolderInput, Folder, Inbox, Check, CalendarIcon, List, Bold, Italic, Underline, Strikethrough, Heading1, Heading2, Heading3, Type, ListOrdered } from "lucide-react";
+import { ArrowLeft, MoreHorizontal, Trash2, Pin, PinOff, FolderInput, Folder, Inbox, Check, CalendarIcon, List, Bold, Italic, Underline, Strikethrough, Heading1, Heading2, Heading3, Type, ListOrdered, Link as LinkIcon, Highlighter } from "lucide-react";
 
 export default function NoteEditorPage({
   params,
@@ -147,11 +147,33 @@ export default function NoteEditorPage({
           <Button variant="ghost" size="sm" className="text-foreground h-8 w-8 p-0" onClick={() => editorRef.current?.execStrikethrough()} aria-label="Strikethrough">
             <Strikethrough className="h-4 w-4" />
           </Button>
+          <Button variant="ghost" size="sm" className="text-foreground h-8 w-8 p-0" onClick={() => editorRef.current?.toggleHighlight()} aria-label="Highlight">
+            <Highlighter className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-foreground h-8 w-8 p-0"
+            onClick={() => {
+              const handle = editorRef.current;
+              if (!handle) return;
+              if (handle.isLinkAtCaret()) {
+                handle.unlinkAtCaret();
+                return;
+              }
+              const url = window.prompt(t("editor.linkPrompt"), "https://");
+              if (url === null) return;
+              handle.createLink(url);
+            }}
+            aria-label="Link"
+          >
+            <LinkIcon className="h-4 w-4" />
+          </Button>
         </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="text-foreground">
+            <Button variant="ghost" size="sm" className="text-foreground translate-x-[13px]">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -253,7 +275,7 @@ export default function NoteEditorPage({
             <Button
               variant="ghost"
               size="sm"
-              className="shrink-0 text-muted-foreground"
+              className="shrink-0 text-muted-foreground translate-x-[13px]"
             >
               {format(note.createdAt, "yyyy.MM.dd")}
             </Button>

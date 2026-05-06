@@ -1,7 +1,5 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import Link from "next/link";
 import {
   SidebarProvider,
   SidebarInset,
@@ -10,8 +8,7 @@ import {
 import { TooltipProvider } from "@minnjii/dx-kit/ui/tooltip";
 import { Spinner } from "@minnjii/dx-kit/ui/spinner";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
-import { cn } from "@minnjii/dx-kit/lib/utils";
-import { FileText, Calendar, FolderTree } from "lucide-react";
+import { GlobalNavTabs } from "@/components/layout/global-nav-tabs";
 import {
   GlobalLoadingProvider,
   useGlobalLoading,
@@ -24,24 +21,11 @@ function HeaderLoadingIndicator() {
   return <Spinner className="h-4 w-4 text-muted-foreground" />;
 }
 
-const VIEW_TABS = [
-  { href: "/notes", label: "모든 노트", icon: FileText },
-  { href: "/notes/calendar", label: "캘린더", icon: Calendar },
-  { href: "/notes/categories", label: "카테고리", icon: FolderTree },
-] as const;
-
 export default function NotesLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
-
-  const isTabActive = (href: string) => {
-    if (href === "/notes") return pathname === "/notes";
-    return pathname.startsWith(href);
-  };
-
   return (
     <TooltipProvider>
       <GlobalLoadingProvider>
@@ -50,27 +34,10 @@ export default function NotesLayout({
             <AppSidebar />
             <SidebarInset>
               <header className="flex h-14 shrink-0 items-center gap-2 px-6">
-                <SidebarTrigger className="md:hidden -ml-2" />
-                <nav className="flex items-center gap-1 mt-0.5">
-                  {VIEW_TABS.map((tab) => {
-                    const active = isTabActive(tab.href);
-                    return (
-                      <Link
-                        key={tab.href}
-                        href={tab.href}
-                        className={cn(
-                          "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors",
-                          active
-                            ? "bg-secondary text-foreground font-medium"
-                            : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                        )}
-                      >
-                        <tab.icon className="h-4 w-4" />
-                        <span className="hidden sm:inline">{tab.label}</span>
-                      </Link>
-                    );
-                  })}
-                </nav>
+                <span className="contents md:hidden">
+                  <SidebarTrigger className="-ml-2 mt-[3px]" />
+                </span>
+                <GlobalNavTabs />
                 <div className="ml-auto flex items-center">
                   <HeaderLoadingIndicator />
                 </div>

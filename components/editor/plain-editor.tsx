@@ -18,6 +18,55 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// Pragmatic URL matcher for trailing-token auto-link. Matches:
+//   https?://example.com/path?q=1
+//   www.example.com
+// Excludes trailing punctuation that's typically sentence-final.
+const URL_TRAILING_RE = /(?:https?:\/\/|www\.)[^\s<>"']+[^\s<>"'.,!?;:)\]}]/i;
+
+function normalizeUrl(raw: string): string {
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${raw}`;
+}
+
+function findAnchorAncestor(node: Node | null): HTMLAnchorElement | null {
+  let cur: Node | null = node;
+  while (cur) {
+    if (cur.nodeType === 1 && (cur as Element).tagName === "A") {
+      return cur as HTMLAnchorElement;
+    }
+    cur = cur.parentNode;
+  }
+  return null;
+}
+
+const HIGHLIGHT_CLASS = "bn-highlight";
+
+function findHighlightAncestor(
+  node: Node | null,
+  root: Node
+): HTMLElement | null {
+  let cur: Node | null = node;
+  while (cur && cur !== root) {
+    if (
+      cur.nodeType === 1 &&
+      (cur as Element).tagName === "MARK" &&
+      (cur as Element).classList.contains(HIGHLIGHT_CLASS)
+    ) {
+      return cur as HTMLElement;
+    }
+    cur = cur.parentNode;
+  }
+  return null;
+}
+
+function unwrapElement(el: Element) {
+  const parent = el.parentNode;
+  if (!parent) return;
+  while (el.firstChild) parent.insertBefore(el.firstChild, el);
+  parent.removeChild(el);
+}
+
 // Convert legacy plaintext (newline-separated) to HTML <div> lines.
 // Used when an older note.content was saved as plaintext rather than HTML.
 function plaintextToHtml(text: string): string {
@@ -47,6 +96,13 @@ export interface PlainEditorHandle {
   setHeading: (level: 1 | 2 | 3 | null) => void;
   toggleBulletAtCaret: () => void;
   toggleNumberedAtCaret: () => void;
+  /** Wrap selection (or insert) with `<a href>`. Empty url → unlink. */
+  createLink: (url: string) => void;
+  unlinkAtCaret: () => void;
+  /** Whether the current selection sits inside an existing anchor. */
+  isLinkAtCaret: () => boolean;
+  /** Toggle a `<mark.bn-highlight>` over the selection / caret. */
+  toggleHighlight: () => void;
 }
 
 export const PlainEditor = forwardRef<PlainEditorHandle, PlainEditorProps>(
@@ -119,6 +175,32 @@ export const PlainEditor = forwardRef<PlainEditorHandle, PlainEditorProps>(
       };
     }, [noteId]);
 
+    // Toggle data-mod on the editor while Cmd/Ctrl is held — drives the
+    // pointer-cursor rule in globals.css so users see "this is clickable now".
+    useEffect(() => {
+      const apply = (down: boolean) => {
+        const el = ref.current;
+        if (!el) return;
+        if (down) el.setAttribute("data-mod", "1");
+        else el.removeAttribute("data-mod");
+      };
+      const onDown = (e: KeyboardEvent) => {
+        if (e.key === "Meta" || e.key === "Control") apply(true);
+      };
+      const onUp = (e: KeyboardEvent) => {
+        if (e.key === "Meta" || e.key === "Control") apply(false);
+      };
+      const onBlur = () => apply(false);
+      window.addEventListener("keydown", onDown);
+      window.addEventListener("keyup", onUp);
+      window.addEventListener("blur", onBlur);
+      return () => {
+        window.removeEventListener("keydown", onDown);
+        window.removeEventListener("keyup", onUp);
+        window.removeEventListener("blur", onBlur);
+      };
+    }, []);
+
     const handleInput = useCallback(() => {
       saveSoon();
     }, [saveSoon]);
@@ -145,6 +227,142 @@ export const PlainEditor = forwardRef<PlainEditorHandle, PlainEditorProps>(
       [exec]
     );
 
+    // Apply target=_blank + rel=noopener to all anchors inside the editor.
+    // Run after createLink/auto-link to harden against tab-nabbing.
+    const hardenAnchors = useCallback(() => {
+      const el = ref.current;
+      if (!el) return;
+      const anchors = el.querySelectorAll("a");
+      anchors.forEach((a) => {
+        a.setAttribute("target", "_blank");
+        a.setAttribute("rel", "noopener noreferrer");
+      });
+    }, []);
+
+    const createLink = useCallback(
+      (url: string) => {
+        const el = ref.current;
+        if (!el) return;
+        if (document.activeElement !== el) el.focus();
+        const trimmed = url.trim();
+        if (!trimmed) {
+          document.execCommand("unlink");
+          saveSoon();
+          return;
+        }
+        const href = normalizeUrl(trimmed);
+        const sel = window.getSelection();
+        const collapsed = !sel || sel.isCollapsed;
+        if (collapsed) {
+          // No selection — insert the URL itself as the link text.
+          const safe = escapeHtml(href);
+          document.execCommand(
+            "insertHTML",
+            false,
+            `<a href="${safe}" target="_blank" rel="noopener noreferrer">${safe}</a>`
+          );
+        } else {
+          document.execCommand("createLink", false, href);
+        }
+        hardenAnchors();
+        saveSoon();
+      },
+      [saveSoon, hardenAnchors]
+    );
+
+    const unlinkAtCaret = useCallback(() => {
+      const el = ref.current;
+      if (!el) return;
+      if (document.activeElement !== el) el.focus();
+      document.execCommand("unlink");
+      saveSoon();
+    }, [saveSoon]);
+
+    const isLinkAtCaret = useCallback(() => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return false;
+      return findAnchorAncestor(sel.anchorNode) !== null;
+    }, []);
+
+    const toggleHighlight = useCallback(() => {
+      const el = ref.current;
+      if (!el) return;
+      if (document.activeElement !== el) el.focus();
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      // Caret inside an existing highlight → unwrap it (toggle off).
+      const existing = findHighlightAncestor(range.startContainer, el);
+      if (existing) {
+        unwrapElement(existing);
+        saveSoon();
+        return;
+      }
+      // Empty selection without existing highlight → no-op.
+      if (range.collapsed) return;
+      const mark = document.createElement("mark");
+      mark.className = HIGHLIGHT_CLASS;
+      try {
+        range.surroundContents(mark);
+      } catch {
+        // Range crosses element boundaries — extract+insert is more permissive.
+        const fragment = range.extractContents();
+        mark.appendChild(fragment);
+        range.insertNode(mark);
+      }
+      // Restore selection to cover the new mark so a follow-up toggle works.
+      const newRange = document.createRange();
+      newRange.selectNodeContents(mark);
+      sel.removeAllRanges();
+      sel.addRange(newRange);
+      saveSoon();
+    }, [saveSoon]);
+
+    // Auto-link the trailing URL token before caret. Returns true if rewrote.
+    const autoLinkBeforeCaret = useCallback((): boolean => {
+      const el = ref.current;
+      if (!el) return false;
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return false;
+      const range = sel.getRangeAt(0);
+      const node = range.startContainer;
+      if (node.nodeType !== Node.TEXT_NODE) return false;
+      // Skip if already inside an anchor.
+      if (findAnchorAncestor(node)) return false;
+      const text = (node as Text).data;
+      const offset = range.startOffset;
+      const before = text.slice(0, offset);
+      // Take the token immediately before caret (split on whitespace).
+      const wsMatch = /\S+$/.exec(before);
+      if (!wsMatch) return false;
+      const token = wsMatch[0];
+      const tokenStart = wsMatch.index;
+      if (!URL_TRAILING_RE.test(token)) return false;
+      const m = URL_TRAILING_RE.exec(token);
+      if (!m) return false;
+      const matched = m[0];
+      const matchStart = tokenStart + (m.index ?? 0);
+      const matchEnd = matchStart + matched.length;
+      // Replace the matched substring with an <a> element.
+      const href = normalizeUrl(matched);
+      const tail = (node as Text).splitText(matchEnd);
+      const head = (node as Text).splitText(matchStart);
+      // After splits: head is [matchStart..matchEnd], tail is [matchEnd..end]
+      const a = document.createElement("a");
+      a.href = href;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = matched;
+      head.parentNode?.replaceChild(a, head);
+      // Restore caret to start of tail (immediately after the new anchor).
+      const newRange = document.createRange();
+      newRange.setStart(tail, 0);
+      newRange.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(newRange);
+      return true;
+    }, []);
+
     useImperativeHandle(
       forwardedRef,
       () => ({
@@ -155,14 +373,24 @@ export const PlainEditor = forwardRef<PlainEditorHandle, PlainEditorProps>(
         setHeading,
         toggleBulletAtCaret: () => exec("insertUnorderedList"),
         toggleNumberedAtCaret: () => exec("insertOrderedList"),
+        createLink,
+        unlinkAtCaret,
+        isLinkAtCaret,
+        toggleHighlight,
       }),
-      [exec, setHeading]
+      [exec, setHeading, createLink, unlinkAtCaret, isLinkAtCaret, toggleHighlight]
     );
 
     const handleKeyDown = useCallback(
       (e: React.KeyboardEvent<HTMLDivElement>) => {
         if (e.nativeEvent.isComposing || e.keyCode === 229) return;
         const mod = e.metaKey || e.ctrlKey;
+        // Auto-link on space/enter (no modifier) before any execCommand kicks in.
+        if (!mod && (e.key === " " || e.key === "Enter")) {
+          if (autoLinkBeforeCaret()) saveSoon();
+          // Don't preventDefault — let the space/enter character continue to be inserted.
+          return;
+        }
         if (!mod) return;
         if (e.key === "b" || e.key === "B") {
           e.preventDefault();
@@ -175,7 +403,22 @@ export const PlainEditor = forwardRef<PlainEditorHandle, PlainEditorProps>(
           exec("underline");
         }
       },
-      [exec]
+      [exec, autoLinkBeforeCaret, saveSoon]
+    );
+
+    // Cmd/Ctrl + click on an anchor → open in new tab.
+    const handleClick = useCallback(
+      (e: React.MouseEvent<HTMLDivElement>) => {
+        const mod = e.metaKey || e.ctrlKey;
+        if (!mod) return;
+        const anchor = findAnchorAncestor(e.target as Node);
+        if (!anchor) return;
+        e.preventDefault();
+        const href = anchor.getAttribute("href");
+        if (!href) return;
+        window.open(href, "_blank", "noopener,noreferrer");
+      },
+      []
     );
 
     return (
@@ -186,6 +429,7 @@ export const PlainEditor = forwardRef<PlainEditorHandle, PlainEditorProps>(
         className="rich-editor outline-none leading-relaxed text-foreground min-h-[50vh] break-words overflow-x-hidden"
         onInput={handleInput}
         onKeyDown={handleKeyDown}
+        onClick={handleClick}
       />
     );
   }
