@@ -4,6 +4,59 @@
 
 ---
 
+## 🕒 Checkpoint — 2026-05-06 (준비완료 신호 + 앱 이름 정리 + 카운트 깜빡임 다층 fix)
+
+**Current Milestone**: 세션 시작 프로토콜 보강 → 앱 이름(`basic note`) 통일 검증(코드 변경 0) → 카운트 `(N)` 깜빡임을 4단 층위로 fix(layout context + sessionStorage hot cache + 트리 노드 + 옛 cache 호환). 4 커밋 / 4 prod 푸시. prod 첫 hydration race는 한계로 수용.
+
+**Key Achievements**
+
+- **준비완료 신호 (`4d341f2`)** — `CLAUDE.md` 0번 섹션 5번째 항목 추가. 세션 시작 자동 복구 1~3단계 후 응답 첫 줄에 `✅ 준비완료` 출력. 인사·확인성 질문엔 직전 세션 핵심 상태 3~5줄 첨부, 작업 명령엔 곧바로 진입.
+
+- **앱 이름 정리 (코드 변경 0)** — 사용자 표면(`title`/`manifest`/사이드바/i18n/백업 파일명) 모두 이미 `basic note`로 통일돼있어 변경 없음. 잔존 `SecureNote` 식별자(`lib/db.ts` Dexie name `"SecureNotes"`, `lib/constants.ts` `VERIFIER_PLAINTEXT = "SecureNote-verified"`, `securenote_last_sync` localStorage 키)는 **데이터 호환성 마커**라 변경 시 모든 기존 사용자 데이터 증발/unlock 불가 — 절대 금지 룰 메모리에 박음. `MEMORY.md` + `project_securenote.md` 갱신.
+
+- **카운트 깜빡임 다층 fix (`21fa1f0`, `00508de`, `e4aa2fb`)** — 직전 세션 R1.2의 known issue. 4 layer:
+  1. `NotesCountProvider` (`components/providers/notes-count-provider.tsx`) — `notes/layout.tsx`에 단일 useLiveQuery로 `{total, uncategorized, byCategory}` 컨텍스트 제공. NoteList/CategoryBranch 재마운트되어도 layout이 살아있어 카운트 즉시 hit, 페이지 전환 race 구조적 제거.
+  2. **count sessionStorage hot cache** (`bn_notes_count_cache_v1`) — 새로고침 첫 프레임에서 직전 카운트 즉시 표시. 정수만이라 보안 영향 0.
+  3. **카테고리 이름 sessionStorage hot cache** (`hooks/use-categories.ts`, `bn_categories_decrypted_v1`) — 새로고침 후 카테고리 페이지 헤더 깜빡 0. **평문 노출 트레이드오프** — 사용자 결정으로 수용. 잠금/리셋 시 invalidate. 노트 본문은 ciphertext 유지.
+  4. **`/notes/categories` 트리 노드 카운트 보강** — `useNotesCount(node.id)` 컨텍스트 우선, useNotes 디크립트 결과 fallback. + 옛 cache 형식(uncategorized 누락) 호환 — 검증 너무 엄격하면 새 배포 직후 cache invalid로 깜빡 노출.
+  - 부수: `categories/[categoryId]/page.tsx`의 fallback `"카테고리"` → `""`로 변경.
+
+**Pending Tasks**
+
+- **링크 활성화** — 사용자 우선 백로그. PlainEditor에서 URL 자동 인식 또는 수동 입력. execCommand `createLink` 시도 → 한계 시 TipTap 검토.
+- **단축키 가이드 복구** — 사용자 우선 백로그. Phase 2B-1(`e840fe0`)에서 settings의 *블록 에디터 시절* 단축키/슬래시 카드를 통째 제거. PlainEditor용 새 가이드 필요(Ctrl+B/I/U/Z 등).
+- **하이라이트** — 사용자 우선 백로그. 텍스트 배경색(형광펜). execCommand `hiliteColor` 또는 inline style span.
+- **이미지 — 명시적 보류** — 사용자 결정: 초경량 노트 컨셉 유지를 위해 이미지 백로그에서 **제거**.
+- 다중 노트 선택/일괄 작업, 헤딩 현재 상태 표시, 자동 백업/버전 히스토리 — 우선순위 낮음.
+- crypto-provider.tsx 추가 분할 — 신규 lifecycle 추가 시 함께. 단독 진행 비추.
+
+**Known Gaps** (Negative Space)
+
+- **PlainEditor용 단축키 가이드 없음** — 블록 에디터 시절 가이드를 Phase 2B-1에서 제거한 후, PlainEditor 전환에 맞춰 새로 만들 계획이 백로그에 없었음. 사용자가 이번 세션에 인지(원래 있다가 사라진 게 아니라 *PlainEditor 시대의 가이드는 처음부터 없었다*는 의미의 갭). 위 Pending Tasks로 이동.
+- **prod 첫 hydration race**: NotesCountProvider 마운트 + 첫 useLiveQuery resolve 사이의 ms 단위 race. sessionStorage 평문 노출 비용 늘리는 것 vs ROI 검토 후 한계로 수용. 사용자 합의("이 정도면 괜찮은 거 같기도").
+
+**Technical Decisions**
+
+- **layout context + sessionStorage hot cache 패턴 표준화** — 디크립트 race가 보이는 곳마다 동일 패턴 적용 가능. (a) 컨텍스트로 페이지 전환 race 제거, (b) sessionStorage로 새로고침 첫 프레임 hit, (c) cache 검증은 *느슨하게* — 형식 변경 시 누락 필드 default 제공해 옛 cache도 받아들임.
+- **앱 이름 통일 — 내부 식별자 절대 금지 룰** — `basic note`(표면) vs `SecureNote`(내부 데이터 마커). Dexie DB name·VERIFIER_PLAINTEXT·`securenote_last_sync` 변경 시 모든 사용자 unlock 불가 또는 데이터 증발. 룰 메모리에 박힘.
+- **sessionStorage 평문 노출 보안 한계선** — 카테고리 이름은 평문 OK(라벨, 같은 도메인 XSS만 위험), 노트 본문은 ciphertext 유지 절대. 미래에 비슷한 결정 시 "사용자 보이는 라벨 vs 실제 콘텐츠" 기준.
+- **dev/prod 환경 차이 인지** — Next dev는 RSC fetch + HMR + 컴파일이 IndexedDB보다 느려 race 가시화. prod는 SW + IDB hot. dev에서 보이는 race는 prod 보험 가치 있지만, prod에서 안 보이면 추가 비용은 가치 비례 검토 후 멈출 것.
+- **단계적 채워짐 vs 한 번에 등장** — title fallback 빈 문자열은 *한 박자씩 채워지는 단계적 표시*가 사용자 인지 부담 큼. 한 번에 채워지는 fade-in이 자연스러움. 미래 비슷한 race 처리 시 동시 등장 우선 검토.
+
+**Agent Notes**
+
+- **Director**: 4 커밋 / 4 prod 푸시. 카운트 깜빡임 fix는 dev 가시화 race + prod 보험. prod 첫 hydration race는 한계 인정 — 합리적 멈춤. 단축키/링크/하이라이트 3개를 다음 세션 진입 시 우선 큐.
+- **Frontend**: layout context + sessionStorage hot cache 패턴 정립. NotesCountProvider가 첫 사례, 비슷한 카운트성 데이터(예: 캘린더 일자별 카운트) 추가 시 동일 패턴 그대로. cache 검증은 미래 형식 변경 시 *받아들이는 방향*으로(누락 필드 default).
+- **사용자 피드백**:
+  - "지금까지는 깜빡임 체크 안 하고 뭐한 거야?" — 정당한 지적. 코드 변경 후 dev에서 직접 체감 검증을 안 하고 패턴만 보고 fix함. 향후 UI 관련 변경은 dev 띄워서 직접 보고 확인할 것.
+  - "ㅂㅅ같아" — 한 박자씩 채워지는 단계적 표시 짜증. 한 번에 채워지는 fade-in 선호.
+  - "데브에만 있는 버그 아니냐" — 정직한 분석 요구. dev/prod 차이를 명시적으로 설명할 것.
+  - "이 정도면 괜찮은 거 같기도" — 합리적 멈춤 기준. 비용 vs ROI 인지 양호. 사용자가 OK 사인 주면 더 손대지 말 것.
+  - "이미지는 안 넣을 거고" — 초경량 노트 컨셉 명시적 확정. 백로그에서 이미지 영구 제거.
+- **환경 회귀 인지**: `/usr/local/bin/node@v16.13.1`이 PATH 우선 → 셸 비대화형(`!`) 진입 시 nvm 함수 미로드로 v16 잡힘. `PATH="/opt/homebrew/bin:$PATH"` prefix로 v25.8.1 사용. 다음 세션에 빌드/테스트 명령 시 동일 prefix 필요.
+
+---
+
 ## 🕒 Checkpoint — 2026-05-04 (인수인계 시스템 보강 + R1 리팩토링 완주 + R2 PWA로 결정)
 
 **Current Milestone**: Known Gaps 슬롯 도입으로 인수인계 시스템 보강 → R1 전체 4개 서브 완주 → R2 진입 시점에 PWA 이미 완비 상태 발견(negative space) → Tauri 백로그 제거. 4개 prod 푸시.
