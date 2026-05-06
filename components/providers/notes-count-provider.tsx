@@ -29,11 +29,18 @@ function readCache(): CachedCounts | undefined {
     if (
       parsed &&
       typeof parsed.total === "number" &&
-      typeof parsed.uncategorized === "number" &&
       parsed.byCategory &&
       typeof parsed.byCategory === "object"
     ) {
-      return parsed as CachedCounts;
+      // Older caches may lack `uncategorized`; default to 0 until the next
+      // useLiveQuery result overwrites it.
+      const uncategorized =
+        typeof parsed.uncategorized === "number" ? parsed.uncategorized : 0;
+      return {
+        total: parsed.total,
+        uncategorized,
+        byCategory: parsed.byCategory,
+      };
     }
   } catch {
     // ignore corrupt cache
