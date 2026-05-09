@@ -4,6 +4,60 @@
 
 ---
 
+## 🕒 Checkpoint — 2026-05-10 (사용 현황 카드 + Markdown 백업 전환 + 영구 제외 백로그 명문화)
+
+**Current Milestone**: 설정 페이지 데이터 카드 개편(사용 현황 + 진행 막대), 25/50/75% 임계값 토스트, 백업 형식을 JSON → 평문 Markdown(.md)로 전환, import 기능 폐기. 1 커밋(`0678692`), prod 수동 배포 1회.
+
+**Key Achievements**
+
+- **설정 사용 현황 카드 (`0678692`)** — `app/settings/page.tsx` 데이터 카드에 신규 섹션. 노트 수 / 카테고리 수 / 저장공간 사용량(`navigator.storage.estimate()`)과 quota 대비 % + 1.5px 진행 막대 표시. `db.notes.filter(!deletedAt).count()` + `db.categories.filter(!deletedAt).count()`로 직접 측정(NotesCountProvider 의존 회피, settings layout이 그 provider 밑에 없음).
+
+- **저장공간 임계값 알림 (`0678692`)** — `hooks/use-storage-warning.ts` 신설. 25/50/75% monotonic dedup 패턴: `bn_storage_warned_v1` localStorage에 마지막 알림 임계값 저장, 줄어들어도 같은 임계값 다시 안 띄움. CryptoProvider `isUnlocked` guard + `ran` ref로 마운트당 1회만 측정. `app/notes/layout.tsx`에 빈 `<StorageWatcher />` 컴포넌트로 트리거(노트 영역 진입 시 fire, 설정 직행 시 skip — 의도).
+
+- **백업 형식 JSON → Markdown 전환 (`0678692`)** — 사용자 결정: "저장용 백업인데 잘 읽히지는 않네" → 단일 .md 파일. `lib/export-markdown.ts` 신설, DOMParser 기반 HTML→MD 변환(의존성 0). 매핑: h1~h6, b/strong, i/em, a[href], `<mark>`→`==text==`, code/pre, blockquote, ul/ol/li, br, p/div, hr. `<u>`는 표준 없어 인라인 HTML 유지. 출력: 헤더 메타(내보낸 시각·노트 수) + 노트별 `# 제목` + `*카테고리* · *작성일* · *수정일* · 📌` 메타 라인 + 본문 + `---` 구분. updatedAt 내림차순 정렬.
+
+- **import 기능 통째 제거 (`0678692`)** — handleImport, importing state, fileInputRef, hidden input, Upload 아이콘, ImportData/LegacyImportV1 타입, i18n.import* 8개 키 제거. 평문 Markdown은 사람이 읽기 위한 백업이지 복원 용도가 아님 — 영구 제외.
+
+- **영구 제외 백로그 명문화 (메모리)** — `project_permanent_exclusions.md` 신설. 이미지·다중선택·자동백업·버전히스토리·import·Tauri 6개 항목. MEMORY 색인 갱신. + Tauri 항목 색인 갱신(stale 1순위 → "Tauri 백로그 제거, 앱스토어 배포 결심 시에만 재검토").
+
+- **prod 배포** — `vercel --prod` 수동 배포(`dpl_3KM6P8hPR47q7iVzW9DkpSxEHJvc`). https://pro03note.vercel.app 에서 동작 확인 OK.
+
+**Pending Tasks**
+
+- 라이트 모드 톤·대비 직접 점검 (carry-over from 2026-05-06 밤)
+- `<meta name="theme-color">` 다크색 하드코드 → 동적 분기 (carry-over)
+- 모바일 헤더에 SidebarTrigger 추가 (메모리 `project_mobile_navigation_gap.md`)
+- crypto-provider.tsx 추가 분할 — 신규 lifecycle 추가 시 함께
+- 헤딩 현재 상태 표시(caret 위치의 H1/H2/H3 툴바 반영) — 우선순위 낮음
+
+**Known Gaps** (Negative Space)
+
+- **GitHub→Vercel Git Integration 끊김** — 이번 세션 새로 인지. `git push origin main` 후 자동 prod 배포 안 됨. `vercel ls`상 자동 배포 흔적 10일 이상 부재. 다음 세션 진입 시 Vercel 대시보드에서 GitHub 연결 상태 점검 필요.
+- **prod 첫 hydration race** (carry-over) — 한계로 수용
+- **라이트 모드 검증 미실시** (carry-over)
+- **dx-kit 후행 utility 충돌 패턴** (carry-over) — 발견 시 `<span className="contents md:hidden">` wrapper
+
+**Technical Decisions**
+
+- **백업 형식: 평문 Markdown(.md) 단일 파일 확정** — JSON 폐기, import 폐기. 사람이 읽기 위함 + 안전한 곳 보관 책임은 사용자.
+- **HTML→MD 변환 의존성 0 원칙** — DOMParser + 직접 walk. turndown 등 라이브러리 회피. `<mark>` 같은 비표준 매핑은 Pandoc/Obsidian 호환 문법(`==text==`) 채택.
+- **임계값 알림 monotonic dedup** — localStorage 키 마지막 임계값 저장, 줄어들어도 같은 임계값 재알림 X. reset 시 `localStorage.clear()`로 자연 초기화(별도 청소 코드 불필요).
+- **StorageWatcher 위치 = `/notes` layout** — 노트 작업 흐름에서 알림 받는 게 자연스러움. 설정 직행 시 알림 skip은 의도.
+- **영구 제외 백로그 명문화** — 메모리 `project_permanent_exclusions.md`로 박음. 다음 세션이 다시 꺼내지 않게.
+
+**Agent Notes**
+
+- **Director**: 1 커밋(`0678692`, 6 files +317/-133) + prod 수동 배포. Git Integration 끊김은 큰 갭이지만 다음 세션 우선 큐로. 분할 vs 단일 커밋 — 사용 현황·임계값·Markdown 전환·import 제거가 모두 "데이터 카드 개편" 한 묶음이라 단일 커밋 합리적.
+- **Frontend**: HTML→MD 변환 패턴(`lib/export-markdown.ts`)은 미래 export 형식 변형(예: 노트별 다운로드, ZIP) 시 재사용 가능. DOMParser walk + tag→md 매핑 dispatcher. `<u>` 같은 표준 부재 태그는 인라인 HTML 유지가 깔끔.
+- **사용자 피드백**:
+  - "JSON이 최선인가? 잘 읽히지 않네" — 형식 선택지 4개 제시(MD/HTML/ZIP/JSON) → MD 채택. 사용자 의도 짚기 + 선택지 + preview 패턴 효과적.
+  - "타우리가 뭐라했지?" — MEMORY 색인 stale 인용으로 잘못된 답변. 정정 + 색인 갱신. **메모리는 본문이 진실, 색인은 stale 가능** 룰 재확인.
+  - "콘솔에 입력해야해?" — 콘솔 입력 부담. 디버그를 코드 우회로 친화적 재구성. 향후 동작 확인 시 사용자 손 안 가게 코드 쪽에서 강제 트리거.
+  - "안뜨는데" → "오 ... 떴어" — 임시 임계값 0% + 디버그 로그로 동작 확인. 검증 후 즉시 원복.
+- **환경**: Node v25.8.1 + PATH `/opt/homebrew/bin` prefix. dev :3003 PID 90108 살아있음. Vercel CLI 51.2.1 → 53.2.0 outdated 경고(업그레이드 권장 메시지 떴으나 미실행).
+
+---
+
 ## 🕒 Checkpoint — 2026-05-06 (밤 세션: 에디터 기능 + 테마 토글 + 헤더 정리)
 
 **Current Milestone**: PlainEditor에 링크·하이라이트 추가, 다크/라이트/시스템 테마 토글 도입, 글로벌 헤더 탭 추출 + sidebar trigger md:hidden fix. 1 커밋(`24dea57`), prod 미배포.
