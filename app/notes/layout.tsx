@@ -14,11 +14,17 @@ import {
   useGlobalLoading,
 } from "@/components/providers/global-loading";
 import { NotesCountProvider } from "@/components/providers/notes-count-provider";
+import { useStorageWarning } from "@/hooks/use-storage-warning";
 
 function HeaderLoadingIndicator() {
   const { isLoading } = useGlobalLoading();
   if (!isLoading) return null;
   return <Spinner className="h-4 w-4 text-muted-foreground" />;
+}
+
+function StorageWatcher() {
+  useStorageWarning();
+  return null;
 }
 
 export default function NotesLayout({
@@ -30,6 +36,7 @@ export default function NotesLayout({
     <TooltipProvider>
       <GlobalLoadingProvider>
         <NotesCountProvider>
+          <StorageWatcher />
           <SidebarProvider>
             <AppSidebar />
             <SidebarInset>

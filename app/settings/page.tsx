@@ -1,11 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import {
   Download,
-  Upload,
   Lock,
   Shield,
   KeyRound,
@@ -16,6 +15,7 @@ import {
   AlertTriangle,
   Trash2,
   Keyboard,
+  HardDrive,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@minnjii/dx-kit/ui/card";
 import { Button } from "@minnjii/dx-kit/ui/button";
@@ -32,8 +32,9 @@ import { useCrypto } from "@/components/providers/crypto-provider";
 import { useLanguage } from "@/components/providers/language-provider";
 import type { Language } from "@/lib/i18n";
 import { db } from "@/lib/db";
-import type { Category, Note } from "@/lib/types";
 import { resetEverything } from "@/lib/reset";
+import { estimateStorage, formatBytes } from "@/lib/storage-estimate";
+import { buildBackupMarkdown } from "@/lib/export-markdown";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -45,29 +46,10 @@ import {
   AlertDialogAction,
 } from "@minnjii/dx-kit/ui/alert-dialog";
 
-// ─── Export / Import Types ───────────────────────────────────
-interface ExportData {
-  version: 2;
-  exportedAt: string;
-  categories: (Omit<Category, "name"> & { name: string })[];
-  notes: (Omit<Note, "title"> & { title: string })[];
-}
-
-// v1 백업 파일 import 호환 — blocks 필드는 무시.
-interface LegacyImportV1 {
-  version: 1;
-  exportedAt: string;
-  categories: ExportData["categories"];
-  notes: ExportData["notes"];
-  blocks?: unknown[];
-}
-type ImportData = ExportData | LegacyImportV1;
-
 export default function SettingsPage() {
   const {
     lockTimeoutMinutes,
     setLockTimeout,
-    encryptText,
     decryptText,
     lock,
     changePassword,
@@ -89,8 +71,39 @@ export default function SettingsPage() {
   ];
 
   const [exporting, setExporting] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ─── Usage State ─────────────────────────────────────────────
+  const [usage, setUsage] = useState<{
+    notes: number;
+    categories: number;
+    bytes: number;
+    quota: number;
+    percent: number;
+    storageSupported: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [notes, categories, info] = await Promise.all([
+        db.notes.filter((n) => !n.deletedAt).count(),
+        db.categories.filter((c) => !c.deletedAt).count(),
+        estimateStorage(),
+      ]);
+      if (cancelled) return;
+      setUsage({
+        notes,
+        categories,
+        bytes: info?.usage ?? 0,
+        quota: info?.quota ?? 0,
+        percent: info?.percent ?? 0,
+        storageSupported: info !== null,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // ── Password Change State ──────────────────────────────────
   const [currentPw, setCurrentPw] = useState("");
@@ -214,34 +227,31 @@ export default function SettingsPage() {
         db.notes.filter((n) => !n.deletedAt).toArray(),
       ]);
 
-      const decryptedCategories = await Promise.all(
-        categories.map(async (cat) => ({
-          ...cat,
-          name: await decryptText(cat.name),
-        }))
+      const categoryNamesById: Record<string, string> = {};
+      await Promise.all(
+        categories.map(async (cat) => {
+          categoryNamesById[cat.id] = await decryptText(cat.name);
+        })
       );
 
       const decryptedNotes = await Promise.all(
         notes.map(async (note) => ({
           ...note,
           title: await decryptText(note.title),
+          content: note.content ? await decryptText(note.content) : "",
         }))
       );
 
-      const exportData: ExportData = {
-        version: 2,
-        exportedAt: new Date().toISOString(),
-        categories: decryptedCategories,
+      const markdown = buildBackupMarkdown({
         notes: decryptedNotes,
-      };
-
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-        type: "application/json",
+        categoryNamesById,
       });
+
+      const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `basic-note-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `basic-note-backup-${new Date().toISOString().slice(0, 10)}.md`;
       a.click();
       URL.revokeObjectURL(url);
 
@@ -253,56 +263,6 @@ export default function SettingsPage() {
       setExporting(false);
     }
   }, [decryptText, t]);
-
-  // ── Import ──────────────────────────────────────────────
-  const handleImport = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      e.target.value = "";
-
-      setImporting(true);
-      try {
-        const text = await file.text();
-        const data: ImportData = JSON.parse(text);
-
-        if (data.version !== 1 && data.version !== 2) {
-          toast.error(t("settings.importBadFormat"));
-          return;
-        }
-
-        const now = Date.now();
-
-        for (const cat of data.categories) {
-          const encrypted: Category = {
-            ...cat,
-            name: await encryptText(cat.name),
-            updatedAt: now,
-          };
-          await db.categories.put(encrypted);
-        }
-
-        for (const note of data.notes) {
-          const encrypted: Note = {
-            ...note,
-            title: await encryptText(note.title),
-            updatedAt: now,
-          };
-          await db.notes.put(encrypted);
-        }
-
-        toast.success(
-          `${t("settings.importCompleteNotes")}${data.notes.length}${t("settings.importCompleteCategories")}${data.categories.length}${t("settings.importCompleteUnit")}`
-        );
-      } catch (err) {
-        console.error("[import]", err);
-        toast.error(t("settings.importError"));
-      } finally {
-        setImporting(false);
-      }
-    },
-    [encryptText, t]
-  );
 
   return (
     <div className="grid gap-6 max-w-2xl">
@@ -547,6 +507,58 @@ export default function SettingsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-6">
+          {/* Usage */}
+          <div className="grid gap-3">
+            <div className="flex items-center gap-2">
+              <HardDrive className="h-4 w-4 text-muted-foreground" />
+              <p className="text-sm font-medium">{t("settings.usage")}</p>
+            </div>
+            <div className="grid gap-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">
+                  {t("settings.usageNotes")}
+                </span>
+                <span className="tabular-nums">
+                  {usage ? `${usage.notes}${t("settings.usageUnit")}` : "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">
+                  {t("settings.usageCategories")}
+                </span>
+                <span className="tabular-nums">
+                  {usage
+                    ? `${usage.categories}${t("settings.usageUnit")}`
+                    : "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">
+                  {t("settings.usageStorage")}
+                </span>
+                <span className="tabular-nums">
+                  {!usage
+                    ? "—"
+                    : !usage.storageSupported
+                      ? t("settings.usageUnsupported")
+                      : `${formatBytes(usage.bytes)} / ${formatBytes(usage.quota)} (${usage.percent.toFixed(1)}%)`}
+                </span>
+              </div>
+              {usage?.storageSupported && usage.quota > 0 ? (
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full bg-primary transition-[width]"
+                    style={{
+                      width: `${Math.min(100, usage.percent).toFixed(2)}%`,
+                    }}
+                  />
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <Separator />
+
           <div className="flex items-center justify-between">
             <div className="grid gap-1">
               <p className="text-sm font-medium">{t("settings.export")}</p>
@@ -563,33 +575,6 @@ export default function SettingsPage() {
               <Download className="h-4 w-4 mr-2" />
               {exporting ? t("settings.exporting") : t("settings.export")}
             </Button>
-          </div>
-
-          <Separator />
-
-          <div className="flex items-center justify-between">
-            <div className="grid gap-1">
-              <p className="text-sm font-medium">{t("settings.import")}</p>
-              <p className="text-sm text-muted-foreground">
-                {t("settings.importDesc")}
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={importing}
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              {importing ? t("settings.importing") : t("settings.import")}
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json"
-              className="hidden"
-              onChange={handleImport}
-            />
           </div>
         </CardContent>
       </Card>
