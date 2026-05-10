@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FileText, Calendar, FolderTree } from "lucide-react";
-import { cn } from "@minnjii/dx-kit/lib/utils";
+import { cn } from "@plus-experience/design-system/lib/utils";
 
 const VIEW_TABS = [
   { href: "/notes", label: "모든 노트", icon: FileText },

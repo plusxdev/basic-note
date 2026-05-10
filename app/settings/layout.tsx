@@ -4,8 +4,8 @@ import {
   SidebarProvider,
   SidebarInset,
   SidebarTrigger,
-} from "@minnjii/dx-kit/ui/sidebar";
-import { TooltipProvider } from "@minnjii/dx-kit/ui/tooltip";
+} from "@plus-experience/design-system/ui/sidebar";
+import { TooltipProvider } from "@plus-experience/design-system/ui/tooltip";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { GlobalNavTabs } from "@/components/layout/global-nav-tabs";
 

@@ -17,17 +17,17 @@ import {
   Keyboard,
   HardDrive,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@minnjii/dx-kit/ui/card";
-import { Button } from "@minnjii/dx-kit/ui/button";
-import { Input } from "@minnjii/dx-kit/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@plus-experience/design-system/ui/card";
+import { Button } from "@plus-experience/design-system/ui/button";
+import { Input } from "@plus-experience/design-system/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@minnjii/dx-kit/ui/select";
-import { Separator } from "@minnjii/dx-kit/ui/separator";
+} from "@plus-experience/design-system/ui/select";
+import { Separator } from "@plus-experience/design-system/ui/separator";
 import { useCrypto } from "@/components/providers/crypto-provider";
 import { useLanguage } from "@/components/providers/language-provider";
 import type { Language } from "@/lib/i18n";
@@ -44,7 +44,7 @@ import {
   AlertDialogFooter,
   AlertDialogCancel,
   AlertDialogAction,
-} from "@minnjii/dx-kit/ui/alert-dialog";
+} from "@plus-experience/design-system/ui/alert-dialog";
 
 export default function SettingsPage() {
   const {

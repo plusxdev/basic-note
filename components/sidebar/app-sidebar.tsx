@@ -17,7 +17,7 @@ import {
   SidebarMenuButton,
   SidebarSeparator,
   SidebarTrigger,
-} from "@minnjii/dx-kit/ui/sidebar";
+} from "@plus-experience/design-system/ui/sidebar";
 import {
   FileText,
   Calendar,

@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "@minnjii/dx-kit/styles.css";
+@import "@plus-experience/design-system/styles.css";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
@@ -53,24 +53,24 @@
 }
 
 :root {
-  --background: #fafafa;
-  --foreground: #0a0a0a;
+  --background: #f7f7f8;
+  --foreground: #18181b;
   --card: #ffffff;
-  --card-foreground: #0a0a0a;
+  --card-foreground: #18181b;
   --popover: #ffffff;
-  --popover-foreground: #0a0a0a;
-  --primary: #000000;
+  --popover-foreground: #18181b;
+  --primary: #18181b;
   --primary-foreground: #fafafa;
-  --secondary: #f0f0f0;
-  --secondary-foreground: #1a1a1a;
-  --muted: #f0f0f0;
-  --muted-foreground: #6b6b6b;
-  --accent: #f0f0f0;
-  --accent-foreground: #1a1a1a;
+  --secondary: #f1f1f3;
+  --secondary-foreground: #27272a;
+  --muted: #f4f4f5;
+  --muted-foreground: #52525b;
+  --accent: #ededee;
+  --accent-foreground: #27272a;
   --destructive: #dc2626;
-  --border: #e5e5e5;
-  --input: #e5e5e5;
-  --ring: #0a0a0a;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #18181b;
   --glow: rgba(0, 210, 255, 0.3);
   --glow-muted: rgba(0, 210, 255, 0.1);
   --chart-1: #00d2ff;
@@ -81,14 +81,14 @@
   --radius: 8px;
   --link: #0066cc;
   --highlight: #ffe040;
-  --sidebar: #fafafa;
-  --sidebar-foreground: #0a0a0a;
-  --sidebar-primary: #0a0a0a;
+  --sidebar: #f4f4f5;
+  --sidebar-foreground: #18181b;
+  --sidebar-primary: #18181b;
   --sidebar-primary-foreground: #fafafa;
-  --sidebar-accent: #f0f0f0;
-  --sidebar-accent-foreground: #1a1a1a;
-  --sidebar-border: #e5e5e5;
-  --sidebar-ring: #0a0a0a;
+  --sidebar-accent: #ededee;
+  --sidebar-accent-foreground: #27272a;
+  --sidebar-border: #e4e4e7;
+  --sidebar-ring: #18181b;
 }
 
 .dark {

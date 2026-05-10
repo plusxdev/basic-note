@@ -2,10 +2,10 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar } from "@minnjii/dx-kit/ui/calendar";
-import { Card, CardContent } from "@minnjii/dx-kit/ui/card";
-import { Button } from "@minnjii/dx-kit/ui/button";
-import { Badge } from "@minnjii/dx-kit/ui/badge";
+import { Calendar } from "@plus-experience/design-system/ui/calendar";
+import { Card, CardContent } from "@plus-experience/design-system/ui/card";
+import { Button } from "@plus-experience/design-system/ui/button";
+import { Badge } from "@plus-experience/design-system/ui/badge";
 import { Plus, FileText } from "lucide-react";
 import { useLoadingIndicator } from "@/components/providers/global-loading";
 import { ko, enUS } from "date-fns/locale";

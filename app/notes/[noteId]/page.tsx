@@ -11,9 +11,9 @@ import { looksLikeCiphertext } from "@/lib/crypto";
 import { isLockError } from "@/lib/decrypt-diagnostics";
 import { PlainEditor, type PlainEditorHandle } from "@/components/editor/plain-editor";
 import { NoteTitle } from "@/components/editor/note-title";
-import { Button } from "@minnjii/dx-kit/ui/button";
-import { Popover, PopoverTrigger, PopoverContent } from "@minnjii/dx-kit/ui/popover";
-import { Calendar } from "@minnjii/dx-kit/ui/calendar";
+import { Button } from "@plus-experience/design-system/ui/button";
+import { Popover, PopoverTrigger, PopoverContent } from "@plus-experience/design-system/ui/popover";
+import { Calendar } from "@plus-experience/design-system/ui/calendar";
 import { ko, enUS } from "date-fns/locale";
 import { format } from "date-fns";
 import {
@@ -25,7 +25,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
   DropdownMenuSeparator,
-} from "@minnjii/dx-kit/ui/dropdown-menu";
+} from "@plus-experience/design-system/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -36,7 +36,7 @@ import {
   AlertDialogFooter,
   AlertDialogCancel,
   AlertDialogAction,
-} from "@minnjii/dx-kit/ui/alert-dialog";
+} from "@plus-experience/design-system/ui/alert-dialog";
 import { useCategories } from "@/hooks/use-categories";
 import { useLanguage } from "@/components/providers/language-provider";
 import { ArrowLeft, MoreHorizontal, Trash2, Pin, PinOff, FolderInput, Folder, Inbox, Check, CalendarIcon, List, Bold, Italic, Underline, Strikethrough, Heading1, Heading2, Heading3, Type, ListOrdered, Link as LinkIcon, Highlighter } from "lucide-react";

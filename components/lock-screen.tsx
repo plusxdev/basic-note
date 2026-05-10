@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { useCrypto } from "@/components/providers/crypto-provider";
 import { useLanguage } from "@/components/providers/language-provider";
-import { Button } from "@minnjii/dx-kit/ui/button";
-import { Input } from "@minnjii/dx-kit/ui/input";
-import { Label } from "@minnjii/dx-kit/ui/label";
+import { Button } from "@plus-experience/design-system/ui/button";
+import { Input } from "@plus-experience/design-system/ui/input";
+import { Label } from "@plus-experience/design-system/ui/label";
 import {
   Card,
   CardHeader,
@@ -13,7 +13,7 @@ import {
   CardDescription,
   CardContent,
   CardFooter,
-} from "@minnjii/dx-kit/ui/card";
+} from "@plus-experience/design-system/ui/card";
 import { Lock, Eye, EyeOff, KeyRound } from "lucide-react";
 
 type Mode = "password" | "setup" | "recovery";

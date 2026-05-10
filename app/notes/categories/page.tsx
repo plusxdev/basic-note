@@ -2,20 +2,20 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@minnjii/dx-kit/ui/button";
+import { Button } from "@plus-experience/design-system/ui/button";
 import {
   AccordionBlock,
   AccordionBlockItem,
   AccordionBlockTrigger,
   AccordionBlockContent,
-} from "@minnjii/dx-kit/ui/accordion-block";
+} from "@plus-experience/design-system/ui/accordion-block";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-} from "@minnjii/dx-kit/ui/dropdown-menu";
+} from "@plus-experience/design-system/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -25,7 +25,7 @@ import {
   AlertDialogFooter,
   AlertDialogCancel,
   AlertDialogAction,
-} from "@minnjii/dx-kit/ui/alert-dialog";
+} from "@plus-experience/design-system/ui/alert-dialog";
 import { Plus, FolderTree, FileText, Folder, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useLoadingIndicator } from "@/components/providers/global-loading";

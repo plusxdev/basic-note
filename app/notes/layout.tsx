@@ -4,9 +4,9 @@ import {
   SidebarProvider,
   SidebarInset,
   SidebarTrigger,
-} from "@minnjii/dx-kit/ui/sidebar";
-import { TooltipProvider } from "@minnjii/dx-kit/ui/tooltip";
-import { Spinner } from "@minnjii/dx-kit/ui/spinner";
+} from "@plus-experience/design-system/ui/sidebar";
+import { TooltipProvider } from "@plus-experience/design-system/ui/tooltip";
+import { Spinner } from "@plus-experience/design-system/ui/spinner";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { GlobalNavTabs } from "@/components/layout/global-nav-tabs";
 import {

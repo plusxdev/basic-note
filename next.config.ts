@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@minnjii/dx-kit"],
+  transpilePackages: ["@plus-experience/design-system"],
   /* config options here */
 };
 

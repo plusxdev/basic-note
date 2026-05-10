@@ -10,12 +10,12 @@ import {
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton,
-} from "@minnjii/dx-kit/ui/sidebar";
+} from "@plus-experience/design-system/ui/sidebar";
 import {
   Collapsible,
   CollapsibleTrigger,
   CollapsibleContent,
-} from "@minnjii/dx-kit/ui/collapsible";
+} from "@plus-experience/design-system/ui/collapsible";
 import { Folder, ChevronRight } from "lucide-react";
 import { useLanguage } from "@/components/providers/language-provider";
 import { useCategories } from "@/hooks/use-categories";

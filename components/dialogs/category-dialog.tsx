@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@minnjii/dx-kit/ui/button";
-import { Input } from "@minnjii/dx-kit/ui/input";
-import { Label } from "@minnjii/dx-kit/ui/label";
+import { Button } from "@plus-experience/design-system/ui/button";
+import { Input } from "@plus-experience/design-system/ui/input";
+import { Label } from "@plus-experience/design-system/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogClose,
-} from "@minnjii/dx-kit/ui/dialog";
+} from "@plus-experience/design-system/ui/dialog";
 import { useLanguage } from "@/components/providers/language-provider";
 
 interface CategoryDialogProps {

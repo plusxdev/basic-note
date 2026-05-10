@@ -4,9 +4,9 @@ import { useState, type ReactNode } from "react";
 import { useCrypto } from "./crypto-provider";
 import { useLanguage } from "@/components/providers/language-provider";
 import { LockScreen } from "@/components/lock-screen";
-import { Spinner } from "@minnjii/dx-kit/ui/spinner";
-import { Toaster } from "@minnjii/dx-kit/ui/sonner";
-import { Button } from "@minnjii/dx-kit/ui/button";
+import { Spinner } from "@plus-experience/design-system/ui/spinner";
+import { Toaster } from "@plus-experience/design-system/ui/sonner";
+import { Button } from "@plus-experience/design-system/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@minnjii/dx-kit/ui/dialog";
+} from "@plus-experience/design-system/ui/dialog";
 import { Copy, Check } from "lucide-react";
 
 function RecoveryKeyDialog() {

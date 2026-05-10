@@ -8,8 +8,8 @@ import {
   CardTitle,
   CardDescription,
   CardAction,
-} from "@minnjii/dx-kit/ui/card";
-import { Button } from "@minnjii/dx-kit/ui/button";
+} from "@plus-experience/design-system/ui/card";
+import { Button } from "@plus-experience/design-system/ui/button";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -19,7 +19,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
-} from "@minnjii/dx-kit/ui/dropdown-menu";
+} from "@plus-experience/design-system/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -30,7 +30,7 @@ import {
   AlertDialogFooter,
   AlertDialogCancel,
   AlertDialogAction,
-} from "@minnjii/dx-kit/ui/alert-dialog";
+} from "@plus-experience/design-system/ui/alert-dialog";
 import {
   Pin,
   PinOff,
