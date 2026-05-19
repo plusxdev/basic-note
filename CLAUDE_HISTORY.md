@@ -4,6 +4,61 @@
 
 ---
 
+## 🕒 Checkpoint — 2026-05-20 (디자인 시스템 전환 + 라이트 톤 정리 + favicon b + 블릿 헤딩 fix)
+
+**Current Milestone**: `@minnjii/dx-kit` → `@plus-experience/design-system` 마이그레이션 + 라이트 모드 zinc 토큰 정렬 + 노트 상세 툴바 간격 0 + favicon "b"로 재구성 + 블릿 안 헤딩↔본문 전환 버그 fix. 3 커밋(`6b20f9b`, `63308ce`, `61acb3c`), prod 수동 배포 1회(`pro03note-jw1mzp0zb`).
+
+**Key Achievements**
+
+- **디자인 시스템 패키지 전환 (`6b20f9b`)** — 사용자가 `npx @plus-experience/design-system` 실행. 14파일 import 경로 일괄 치환(`@minnjii/dx-kit/*` → `@plus-experience/design-system/*`), `npm uninstall @minnjii/dx-kit`, `next.config.ts transpilePackages` 정리. 같은 shadcn 기반이라 sed 치환만으로 마이그레이션 완료(tsc --noEmit 0).
+
+- **globals.css 154줄 회귀 복구 (`6b20f9b`)** — 설치 스크립트가 globals.css 통째로 덮어써서 `--link`/`--highlight` 토큰 + `.rich-editor` 본문 스타일 + 사이드바 폭/투명 + 캘린더 selected 셀 + 아코디언 폴더 아이콘 활성색(`#50e3c2`) + `[data-collapsible="icon"]` 가시성 + contenteditable placeholder가 모두 날아간 사고 발견. 직접 점검으로 식별, 154줄 그대로 복구.
+
+- **라이트 모드 zinc 기반 토큰 재정렬 (`6b20f9b`)** — bg(#fafafa→#f7f7f8) ↔ card(#fff) 분리, secondary/muted/accent 톤 분화(#f1f1f3/#f4f4f5/#ededee), muted-foreground #6b → #52(zinc-600) 대비 강화, border #e5 → #e4. 다크 토큰은 `--link` 복구만, 그 외 미변경. "희미하다"는 사용자 인상의 직접 원인이었던 동일 #f0f0f0 회색 stack 해소.
+
+- **CLAUDE_DESIGN.md 폐기 (`6b20f9b`)** — design-system이 자체 `DESIGN_SYSTEM.md`/`AGENTS.md` 제공. CLAUDE.md 끝에 `@DESIGN_SYSTEM.md` 참조 추가됨(사용자 직접 편집). CLAUDE_DESIGN.md는 stale 위험으로 삭제, 단일 출처화.
+
+- **포맷 툴바 간격 0 (`63308ce`)** — 노트 상세 가운데 포맷 아이콘 그룹 `gap-0.5` → `gap-0`. 좌측 뒤로 버튼 내부는 그대로.
+
+- **favicon "b" + 키움 (`63308ce` + `61acb3c`)** — `public/icons/icon.svg` 글자 `n` → `b`, font-size 280 → 360, baseline 380으로 보정. PNG 3장(192/512/180 apple-touch)은 Next.js transitive `sharp`로 SVG에서 즉시 재생성(보수적으로 ImageMagick 가정한 1차 안내는 잘못된 판단이었음, 사용자 지적 후 정정).
+
+- **블릿 안 헤딩 전환 버그 fix (`63308ce`)** — Chrome execCommand `formatBlock`이 `<li>` 자식 헤딩을 풀어주지 못해 "본문크기로 안 돌아감". `setHeading` 분기: LI 안이면 DOM 직접 조작 — 본문(null)은 li 자식 h*를 unwrap(블릿 유지), 다른 헤딩은 li 자식 h* 교체 또는 li 텍스트를 h*로 wrap. 일반 block(h*/p/div)은 기존 execCommand 그대로.
+
+- **prod 수동 배포** — `vercel --prod --yes` 1회. `pro03note-jw1mzp0zb-...vercel.app` Ready, alias `pro03note.vercel.app` HTTP 200.
+
+**Pending Tasks**
+
+- `<meta name="theme-color">` 다크색 하드코드 → 라이트/다크 동적 분기 (carry-over)
+- 모바일 헤더에 SidebarTrigger 추가 (`project_mobile_navigation_gap.md`, carry-over)
+- 헤딩 caret 위치 툴바 상태 표시 — 커서가 H1 위면 사이즈 트리거가 H1 활성 (우선순위 낮음, carry-over)
+- crypto-provider.tsx 추가 분할 — 신규 lifecycle 추가 시 (carry-over)
+
+**Known Gaps** (Negative Space)
+
+- **GitHub→Vercel Git Integration 끊김** (carry-over) — 이번 세션 push 3회 했으나 자동 prod 배포 흔적 없음. 마지막 자동 배포 8일+ 전. 대시보드 GitHub 연결 점검은 별도 세션 결심 필요.
+- **design-system 설치 스크립트가 `app/globals.css`를 통째로 덮어쓰는 hazard** — 이번 세션 새로 인지. 차후 `npm update` 후 `npx @plus-experience/design-system` 재실행 시 globals.css 백업 후 154줄 머지 필요. 메모리 `project_design_system.md`에 박힘.
+- **prod 첫 hydration race** (carry-over) — 한계로 수용
+
+**Technical Decisions**
+
+- **디자인 시스템 단일 출처화** — `DESIGN_SYSTEM.md`/`AGENTS.md`(동일 내용, design-system이 양쪽에 박음)가 1차. `CLAUDE_DESIGN.md` 폐기. CLAUDE.md `@DESIGN_SYSTEM.md` 참조로 세션 시작 시 자동 로드.
+- **dx-kit 완전 제거** — package.json 의존성, node_modules, `next.config.ts transpilePackages`에서 모두 제거. import 경로 잔존 0(grep 검증).
+- **블릿 안 헤딩 전환 = LI 분기 + DOM 직접 조작** — execCommand 한계를 직접 처리. li 자식 h*를 unwrap/교체/wrap 패턴. 캐럿은 새 노드 끝으로 복원. 향후 ol/blockquote/code 등 다른 wrapping block에도 동일 패턴 확장 가능.
+- **PNG 재생성 = Next.js transitive sharp** — 별도 도구 설치 없이 `node -e "require('sharp')..."` 한 줄로 SVG → PNG 3장. ImageMagick 가정은 불필요했음.
+- **라이트 톤 = zinc 팔레트 기준** — secondary/muted/accent를 #f1/#f4/#ed로 분화, foreground #52 대비 강화. shadcn 표준 zinc와 정합.
+
+**Agent Notes**
+
+- **Director**: 3 커밋 분할 합리적(시스템 전환 / 툴바+favicon+에디터 fix / PNG 재생성). 사용자 시각 점검 매 사이클 받고 진행한 패턴. push는 명시 승인("일단 푸시", "응", "고")마다 따로 받음. design-system 설치 사고는 사용자가 직접 인지 못 한 큰 회귀였음 — 다음 세션부터는 design-system 패키지 업데이트 직후 globals.css diff 자동 점검 권장.
+- **Frontend**: PlainEditor `setHeading` LI 분기 패턴은 향후 caret 상태 표시 기능(블릿 안 헤딩 인식 포함) 구현 시 같은 BLOCK_RE 탐색 로직을 재사용 가능. `formatBlock` 의 브라우저별 동작 한계는 이후 다른 commands(예: insertOrderedList → unordered 토글)에도 같은 직접 조작 패턴이 필요할 수 있음.
+- **Designer/Publisher**: 라이트 토큰 zinc 정렬로 카드/sidebar/콘텐츠 분리감 확보. 그림자 처리는 design-system 기본 `shadow-md shadow-black/5` 패턴 따르면 됨. favicon 'b' 한 글자 + #09090b 배경 + #f0f0f0 글자, font-weight 600은 dark/light 모두 강한 가독성.
+- **사용자 피드백**:
+  - "신으로 갈거야" — DESIGN_SYSTEM.md 단일 출처화. CLAUDE_DESIGN.md 폐기 결정.
+  - "파비콘 b 로 만드는게 어려워? 다른 세션에서는 바로 하던데" — 보수적으로 ImageMagick 가정한 게 잘못. node_modules의 sharp로 즉시 가능했음. 다음 세션부터 외부 도구 안내 전에 transitive deps 먼저 확인.
+- **환경**: dev :3003 PID 49317. Node v25.8.1 + PATH `/opt/homebrew/bin` prefix. Vercel CLI 51.2.1 → 53.3.1 outdated 경고 지속.
+
+---
+
 ## 🕒 Checkpoint — 2026-05-10 (사용 현황 카드 + Markdown 백업 전환 + 영구 제외 백로그 명문화)
 
 **Current Milestone**: 설정 페이지 데이터 카드 개편(사용 현황 + 진행 막대), 25/50/75% 임계값 토스트, 백업 형식을 JSON → 평문 Markdown(.md)로 전환, import 기능 폐기. 1 커밋(`0678692`), prod 수동 배포 1회.
