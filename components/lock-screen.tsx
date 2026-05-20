@@ -5,7 +5,6 @@ import { useCrypto } from "@/components/providers/crypto-provider";
 import { useLanguage } from "@/components/providers/language-provider";
 import { Button } from "@plus-experience/design-system/ui/button";
 import { Input } from "@plus-experience/design-system/ui/input";
-import { Label } from "@plus-experience/design-system/ui/label";
 import {
   Card,
   CardHeader,
@@ -14,15 +13,24 @@ import {
   CardContent,
   CardFooter,
 } from "@plus-experience/design-system/ui/card";
-import { Lock, Eye, EyeOff, KeyRound } from "lucide-react";
+import { Lock, Eye, EyeOff, KeyRound, CloudOff, AlertTriangle } from "lucide-react";
 
 type Mode = "password" | "setup" | "recovery";
 
 export function LockScreen() {
-  const { isSetup, setup, unlock, recoverWithKey } = useCrypto();
+  const { isSetup, bootstrapState, setup, unlock, recoverWithKey } = useCrypto();
   const { t } = useLanguage();
 
-  const [mode, setMode] = useState<Mode>(isSetup ? "password" : "setup");
+  // bootstrapState gates which entry path is offered when there is no local
+  // settings row. We never default to "setup" when the cloud might still hold
+  // the user's data — that's how PWAs end up with orphaned ciphertext.
+  const initialMode: Mode = isSetup
+    ? "password"
+    : bootstrapState === "remote-exists"
+      ? "recovery"
+      : "setup";
+
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [recoveryKeyInput, setRecoveryKeyInput] = useState("");
@@ -55,8 +63,17 @@ export function LockScreen() {
     setError("");
     try {
       await setup(password);
-    } catch {
-      setError(t("lock.errSetup"));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg === "SETUP_BLOCKED_REMOTE_DATA") {
+        // Bootstrap state already flipped to "remote-exists"; surface the
+        // dedicated screen instead of a generic error.
+        setError(t("lock.errSetupBlocked"));
+        resetFields();
+        setMode("recovery");
+      } else {
+        setError(t("lock.errSetup"));
+      }
     } finally {
       setLoading(false);
     }
@@ -109,6 +126,74 @@ export function LockScreen() {
     else if (mode === "password") handleUnlock();
     else handleRecover();
   };
+
+  // ── Offline guard ─────────────────────────────────────────
+  // No local settings *and* offline — we cannot tell whether this is a brand
+  // new install or an iOS-PWA partitioned-storage instance whose cloud
+  // account already holds encrypted data. Refuse to proceed.
+  if (!isSetup && bootstrapState === "offline") {
+    return (
+      <div className="flex h-screen items-center justify-center p-6">
+        <Card className="w-full max-w-sm">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+              <CloudOff className="h-7 w-7 text-primary" />
+            </div>
+            <CardTitle className="text-xl tracking-tight">
+              {t("lock.offlineTitle")}
+            </CardTitle>
+            <CardDescription>{t("lock.offlineDesc")}</CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <Button
+              type="button"
+              className="w-full"
+              onClick={() => window.location.reload()}
+            >
+              {t("lock.offlineRetry")}
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
+  // ── Remote-exists guard ───────────────────────────────────
+  // Cloud has entities but no settings — typically PWA-partitioned storage.
+  // We force a recovery-key entry and explicitly hide the setup path until
+  // the user either recovers or the bootstrap state changes.
+  const showRemoteExistsBanner =
+    !isSetup && bootstrapState === "remote-exists" && mode !== "recovery";
+
+  if (showRemoteExistsBanner) {
+    return (
+      <div className="flex h-screen items-center justify-center p-6">
+        <Card className="w-full max-w-sm">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10">
+              <AlertTriangle className="h-7 w-7 text-destructive" />
+            </div>
+            <CardTitle className="text-xl tracking-tight">
+              {t("lock.remoteExistsTitle")}
+            </CardTitle>
+            <CardDescription>{t("lock.remoteExistsDesc")}</CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <Button
+              type="button"
+              className="w-full"
+              onClick={() => {
+                resetFields();
+                setMode("recovery");
+              }}
+            >
+              {t("lock.remoteExistsButton")}
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen items-center justify-center p-6">
@@ -255,7 +340,7 @@ export function LockScreen() {
                 className="text-muted-foreground"
                 onClick={() => {
                   resetFields();
-                  setMode("password");
+                  setMode(isSetup ? "password" : "setup");
                 }}
               >
                 {t("lock.backToPassword")}

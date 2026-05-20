@@ -35,6 +35,7 @@ import {
   syncPushSettings,
   startAutoSync,
   stopAutoSync,
+  hasRemoteEntities,
 } from "@/lib/sync/engine";
 import {
   saveSession,
@@ -48,10 +49,29 @@ import {
 } from "@/lib/crypto-broadcast";
 import { useIdleAutoLock } from "@/hooks/use-idle-auto-lock";
 
+/**
+ * Bootstrap state — drives the lock screen when the local IDB has no
+ * `settings` row. Important for PWA on iOS, where the standalone instance
+ * has a partitioned storage and sees an empty IDB even though Supabase
+ * still holds the user's encrypted data under their existing master key.
+ *
+ *  - "checking": waiting for Supabase pull / connectivity probe
+ *  - "fresh":    confirmed new install, no remote settings *and* no remote
+ *                entities → setup screen is safe
+ *  - "remote-exists": remote entities exist but settings could not be
+ *                pulled. Setup would mint a new master key and orphan all
+ *                existing ciphertext, so we surface a recovery-only screen
+ *  - "offline":  no network, IDB empty. We cannot tell whether this is a
+ *                truly new install or a partitioned PWA — fail safe and
+ *                ask the user to connect before allowing setup
+ */
+export type BootstrapState = "checking" | "fresh" | "remote-exists" | "offline";
+
 interface CryptoContextValue {
   isSetup: boolean;
   isUnlocked: boolean;
   isLoading: boolean;
+  bootstrapState: BootstrapState;
   lockTimeoutMinutes: number;
   /** Non-null when user must save their recovery key (after setup or migration) */
   pendingRecoveryKey: string | null;
@@ -72,6 +92,7 @@ const CryptoContext = createContext<CryptoContextValue | null>(null);
 export function CryptoProvider({ children }: { children: ReactNode }) {
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [bootstrapState, setBootstrapState] = useState<BootstrapState>("checking");
   const [pendingRecoveryKey, setPendingRecoveryKey] = useState<string | null>(null);
   const autoUnlockAttempted = useRef(false);
   // Wrapper this cryptoKey was unwrapped from. If settings.encryptedMasterKey
@@ -91,6 +112,7 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
       // settings가 로드됐어도, 저장된 세션이 있으면 auto-unlock effect가
       // 끝날 때 isLoading을 false로 풀도록 남겨둔다. 그렇지 않으면
       // 새로고침 시 "LockScreen 깜빡임 → 해제" 순서로 보이게 된다.
+      setBootstrapState("fresh");
       const timeout = settings.lockTimeoutMinutes ?? DEFAULT_LOCK_TIMEOUT_MINUTES;
       const hasSavedSession = loadSession(timeout) !== null;
       if (!hasSavedSession) setIsLoading(false);
@@ -102,15 +124,45 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
       typeof window !== "undefined" &&
       localStorage.getItem(RESET_PENDING_KEY) === "1"
     ) {
+      setBootstrapState("fresh");
       setIsLoading(false);
       return;
     }
-    syncPullSettings()
-      .then(async (remote) => {
-        if (remote) await db.settings.put(remote);
-      })
-      .catch(() => {})
-      .finally(() => setIsLoading(false));
+
+    // IDB has no settings. Probe Supabase to distinguish:
+    //  - fresh install (no remote data)        → allow setup
+    //  - PWA on partitioned storage (entities) → block setup, force recovery
+    //  - offline                                → block setup
+    let cancelled = false;
+    setBootstrapState("checking");
+
+    const isOnline =
+      typeof navigator === "undefined" ? true : navigator.onLine;
+    if (!isOnline) {
+      setBootstrapState("offline");
+      setIsLoading(false);
+      return;
+    }
+
+    (async () => {
+      const remote = await syncPullSettings().catch(() => null);
+      if (cancelled) return;
+      if (remote) {
+        await db.settings.put(remote);
+        // Live query will re-fire with the new settings; bootstrapState
+        // flips to "fresh" via the top branch. Keep isLoading true until
+        // then so the lock screen doesn't flash.
+        return;
+      }
+      const hasEntities = await hasRemoteEntities().catch(() => false);
+      if (cancelled) return;
+      setBootstrapState(hasEntities ? "remote-exists" : "fresh");
+      setIsLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [settings]);
 
   // Auto-unlock from session
@@ -155,9 +207,18 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoading(false));
   }, [settings, cryptoKey]);
 
-  // Safety timeout
+  // Safety timeout — only kicks in if Supabase probe takes too long. We
+  // never want to *silently* drop into setup mode for a partitioned-storage
+  // PWA, so when the bootstrap probe stalls we surface the offline screen
+  // instead. Real fresh installs resolve in <1s online.
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 5000);
+    const timer = setTimeout(() => {
+      setIsLoading((prev) => {
+        if (!prev) return prev;
+        setBootstrapState((s) => (s === "checking" ? "offline" : s));
+        return false;
+      });
+    }, 10_000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -226,6 +287,22 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
 
   // ── Setup (first time) ─────────────────────────────────────
   const setup = useCallback(async (password: string) => {
+    // Last-line defense against PWA-partitioned-storage footgun: even if the
+    // user reached this code path, refuse to mint a fresh master key when
+    // Supabase still holds encrypted entities. Re-keying would orphan all
+    // that ciphertext. The reset flow clears RESET_PENDING_KEY *and* purges
+    // remote rows, so a legitimate reset → setup passes this check.
+    const skipRemoteCheck =
+      typeof window !== "undefined" &&
+      localStorage.getItem(RESET_PENDING_KEY) === "1";
+    if (!skipRemoteCheck) {
+      const hasEntities = await hasRemoteEntities().catch(() => false);
+      if (hasEntities) {
+        setBootstrapState("remote-exists");
+        throw new Error("SETUP_BLOCKED_REMOTE_DATA");
+      }
+    }
+
     const result = await createMasterKeySetup(password);
     const now = Date.now();
     await db.settings.put({
@@ -509,6 +586,7 @@ export function CryptoProvider({ children }: { children: ReactNode }) {
         isSetup,
         isUnlocked,
         isLoading,
+        bootstrapState,
         lockTimeoutMinutes: settings?.lockTimeoutMinutes ?? DEFAULT_LOCK_TIMEOUT_MINUTES,
         pendingRecoveryKey,
         setup,

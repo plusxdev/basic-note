@@ -31,6 +31,13 @@ const ko = {
   "lock.errRecovery": "복구 중 오류가 발생했습니다",
   "lock.loading": "로딩 중...",
   "lock.decryptFail": "(복호화 실패)",
+  "lock.remoteExistsTitle": "기존 데이터 발견",
+  "lock.remoteExistsDesc": "이 기기는 처음 시작하지만 클라우드에 기존 데이터가 있습니다. 새 비밀번호로 시작하면 기존 데이터를 더 이상 읽을 수 없게 됩니다. 복구 키와 기존 비밀번호로 진입하세요.",
+  "lock.remoteExistsButton": "복구 키로 진입",
+  "lock.offlineTitle": "연결 필요",
+  "lock.offlineDesc": "이 기기는 처음 시작합니다. 클라우드에 기존 데이터가 있는지 확인하기 위해 인터넷 연결이 필요합니다.",
+  "lock.offlineRetry": "다시 시도",
+  "lock.errSetupBlocked": "클라우드에 기존 데이터가 있어 새로 설정할 수 없습니다. 복구 키로 진입하세요.",
 
   // ── Recovery Key Dialog ────────────────────────────
   "recovery.title": "복구 키를 저장하세요",
@@ -217,6 +224,13 @@ const en: typeof ko = {
   "lock.errRecovery": "An error occurred during recovery",
   "lock.loading": "Loading...",
   "lock.decryptFail": "(Decryption failed)",
+  "lock.remoteExistsTitle": "Existing data found",
+  "lock.remoteExistsDesc": "This device is starting fresh but your cloud account already has data. Setting a new password here would orphan that data. Enter your existing password using your recovery key instead.",
+  "lock.remoteExistsButton": "Continue with Recovery Key",
+  "lock.offlineTitle": "Connection required",
+  "lock.offlineDesc": "This device is starting fresh. We need an internet connection to check whether your cloud account already has data.",
+  "lock.offlineRetry": "Retry",
+  "lock.errSetupBlocked": "Your cloud account already has data. Use your recovery key to continue.",
 
   // ── Recovery Key Dialog ────────────────────────────
   "recovery.title": "Save Your Recovery Key",

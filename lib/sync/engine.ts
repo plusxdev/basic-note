@@ -181,6 +181,38 @@ export async function syncPullSettings(): Promise<AppSettings | null> {
   return pullSettings();
 }
 
+/**
+ * Quick existence check for non-deleted entities (notes or categories) on
+ * Supabase. Used by bootstrap to detect "new install but server already has
+ * data" — typically iOS PWA storage partitioning, where the standalone
+ * instance has an empty IDB but the same Supabase project still holds the
+ * user's encrypted data. Setup must be blocked in that state, otherwise a
+ * fresh master key would be pushed and the existing ciphertext becomes
+ * permanently undecryptable.
+ *
+ * Returns false on any error/offline so callers fall back to permissive
+ * behavior — we only want to *block* on a confident positive.
+ */
+export async function hasRemoteEntities(): Promise<boolean> {
+  if (!SYNC_ENABLED) return false;
+  if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+  try {
+    const { count, error } = await supabase
+      .from("encrypted_entities")
+      .select("id", { count: "exact", head: true })
+      .eq("deleted", false)
+      .limit(1);
+    if (error) {
+      console.error("[sync] hasRemoteEntities failed:", error);
+      return false;
+    }
+    return (count ?? 0) > 0;
+  } catch (e) {
+    console.error("[sync] hasRemoteEntities threw:", e);
+    return false;
+  }
+}
+
 // ─── Push Single Entity (incremental) ────────────────────────
 
 export async function syncPushEntity(
