@@ -4,6 +4,68 @@
 
 ---
 
+## 🕒 Checkpoint — 2026-05-21 (PWA 데이터 손상 차단 + 비번 변경 전파 + favicon Beats 비례 + 카피라이트)
+
+**Current Milestone**: iOS PWA partitioned storage로 인한 데이터 손상 시나리오 사전 차단(setup 경로 봉쇄 + 최후 방어선), 비밀번호 변경 다른 기기 자동 전파(unlock 재시도 + app_settings realtime), SW 캐시 v2 bump로 정적 자산 강제 갱신, favicon b 글자를 Beats 스타일 비례로 재설계(bowl 중심·stem 단축·정렬 보정), 설정 페이지 카피라이트 라인 추가. 7 커밋(`1fd6f99`, `63c88bb`, `4d21fa0`, `1231bed`, `fdd867e`, `d4fdf34`, `056e816`, `72aa739`, `29ceed3`), prod 수동 배포 6회+.
+
+**Key Achievements**
+
+- **PWA 데이터 손상 시나리오 차단 (`1fd6f99`)** — iOS 16.4+ PWA가 일반 Safari와 storage가 분리되어, PWA 첫 실행 → 빈 IDB → setup 화면 → 새 random master key 생성 → supabase `app_settings` 덮어쓰기 → 웹의 cryptoKey와 다른 키로 새 노트 암호화 → 옛 데이터 전부 "Decryption failed"로 잠기는 시나리오를 사용자가 직접 보고. 코드로 봉쇄:
+  - `lib/sync/engine.ts`에 `hasRemoteEntities()` 추가 — `encrypted_entities` head-count로 기존 데이터 존재 여부 확인 (deleted=false 조건, 에러/오프라인 시 false 폴백)
+  - `crypto-provider`에 `bootstrapState` 4분기 도입(`checking`/`fresh`/`remote-exists`/`offline`). settings IDB에 없을 때 `syncPullSettings()` 결과를 끝까지 기다린 뒤 entities 검사로 분기. 5초 timeout → 10초로 늘리고 정체 시 `offline`으로 강제(setup 화면 silent 노출 방지)
+  - `setup()` 최후 방어선: `RESET_PENDING_KEY` 아닐 때 `hasRemoteEntities()` 재확인 → `SETUP_BLOCKED_REMOTE_DATA` throw
+  - `lock-screen`: `remote-exists` 화면(AlertTriangle + 복구 키 진입 강제), `offline` 화면(CloudOff + 재시도 버튼). i18n ko/en 추가
+- **비밀번호 변경 다른 기기 전파 (`63c88bb`)** — 웹에서 비번 바꿔도 모바일은 옛 비번으로만 unlock 가능했던 문제. 모바일 IDB의 settings가 갱신되지 않아서. 두 갈래:
+  - `unlock()` 1차 검증 실패 시 `syncPullSettings()` 호출 → `remote.encryptedMasterKey` 다르면 IDB 갱신 후 1회 재검증
+  - `startAutoSync()`에 `app_settings` INSERT/UPDATE realtime 구독 + `handleSettingsChange` 미러링 추가
+- **SW 캐시 v2 bump (`4d21fa0`)** — `sw.js`의 `CACHE_NAME`을 `just-note-v1` → `basic-note-v2`로 bump. cache-first로 잡혀있던 옛 favicon이 클라이언트에 박혀있던 문제. activate 핸들러가 다른 이름 캐시 일괄 삭제.
+- **favicon 기하학적 재설계** — 사용자 피드백 사이클로 반복 조정:
+  - `1231bed`: system-ui 폰트 의존 제거, SVG path로 직접 그리기. stem 두께 60 + bowl stroke 60 일정, serif 없음
+  - `d4fdf34`: Beats 비례 시도(stem 길이 396) — 사용자가 "기둥 짧게, 왼쪽 아래 삐짐 없게, 원에 기둥 달린 형태"로 정정
+  - `056e816`: bowl 외반경 100 → 120, 안쪽 반경 40 → 60(두께 60 유지), stem 길이 256, 하단을 bowl center에서 끝내 왼쪽 아래 자취 제거
+  - `72aa739`: stem 길이 256 → 206으로 추가 단축
+  - `29ceed3`: 작은 사이즈(브라우저 탭 favicon) 기준 1픽셀 보정 — SVG 16단위 우상단 이동
+  - 최종 좌표: stem `x=152 y=94 w=60 h=206`, bowl `cx=272 cy=300 R=120 r=60`. PNG 3장(192/512/180) `sharp`로 매번 재생성
+- **설정 페이지 카피라이트 (`fdd867e`)** — 푸터 기존 라인(`basic note — AES-256-GCM`) 아래 한 줄 추가: `© 2026 PlusX basic note · Made by Kim Kihyun`. 다국어 분기 없이 직접 문자열.
+
+**Pending Tasks**
+
+- **PWA 데이터 정리 테스트**: 사용자가 직접 PWA 데이터 + 앱 삭제 → `pro03note.vercel.app`에서 재설치하여 정상 unlock 화면이 뜨는지 검증. 이번 세션 변경의 실 검증 단계.
+- **손상된 supabase 상태 복원**(carry-over from 이번 세션): PWA가 마지막에 push한 새 settings가 supabase `app_settings`를 덮어쓴 상태일 가능성. 웹 cryptoKey 살아있는 동안 옛 settings를 push로 복원하는 작업. (PWA 재설치 후 테스트 결과에 따라 필요 여부 결정)
+- `<meta name="theme-color">` 다크/라이트 동적 분기 (carry-over)
+- 모바일 헤더 SidebarTrigger 추가 (`project_mobile_navigation_gap.md`, carry-over)
+- 헤딩 caret 위치 툴바 상태 표시 (낮은 우선순위, carry-over)
+- `crypto-provider.tsx` 추가 분할 (신규 lifecycle 추가 시, carry-over)
+
+**Known Gaps** (Negative Space)
+
+- **PWA에서 만든 신규 노트 잔재**: PWA가 새 master key로 암호화한 노트가 supabase `encrypted_entities`에 남아있음. 웹의 cryptoKey로는 복호화 불가("Decryption failed" 표시). PWA 재설치/리셋 흐름에서 정리되거나 사용자가 수동으로 삭제해야 함.
+- **dev 서버 default node 16 문제**: shell PATH에 `/opt/homebrew/bin` prefix 없으면 `npm run dev`가 node 16을 잡아 Next.js 거부. 이번 세션 `PATH="/opt/homebrew/bin:$PATH"` 명시로 회피. 환경 자체 영구 fix 미실시.
+- **GitHub→Vercel Git Integration 끊김** (carry-over): 이번 세션 6번의 prod 배포 모두 수동(`vercel --prod --yes`). 한 번 internal server error로 재시도 필요했음. 대시보드 GitHub 연결 점검은 별도 세션 결심 필요.
+- **design-system 설치 스크립트 globals.css 덮어쓰기 hazard** (carry-over): `npx @plus-experience/design-system` 재실행 시 154줄 머지 필요.
+- **prod 첫 hydration race** (carry-over): 한계로 수용.
+
+**Technical Decisions**
+
+- **bootstrapState 4-state 패턴** — `checking` / `fresh` / `remote-exists` / `offline`. settings 부재 + 외부 source(supabase)의 데이터 존재 가능성을 명시적으로 4분기. 외부 상태가 master key 정합성에 영향 주는 모든 경계에서 응용 가능. 다른 시나리오(IDB 초기화 후 다른 기기 데이터 등)에도 같은 패턴 적용 가능.
+- **setup() 최후 방어선** — UI 차단을 우회해 setup이 호출되더라도 supabase에 entities 있으면 throw. UI 분기 + 코드 경로 이중 가드. 에러 메시지 `SETUP_BLOCKED_REMOTE_DATA`를 LockScreen이 catch해서 복구 모드로 자동 전환.
+- **unlock() 검증 실패 시 settings pull → 1회 재검증** — "비번 틀림"과 "다른 기기에서 비번 변경됨"을 구분. 다른 wrapper면 IDB 갱신 후 같은 비번으로 재시도. 모바일이 비번 변경 자동 따라잡음.
+- **app_settings realtime 구독** — 비번 변경이 다른 기기로 즉시 전파. `crypto-provider`의 기존 외부 re-key 감지 effect와 결합해 자동 lock 동작.
+- **SW cache 이름 bump 패턴** — `basic-note-v2`. 정적 자산 강제 무효화 필요 시 같은 패턴(이름 bump → activate에서 옛 캐시 삭제). 다음 favicon 또는 정적 자산 사고 시 재사용.
+- **favicon b 최종 비례** — bowl이 메인, stem이 위로 짧게. stem `x=152~212 y=94~300`, bowl `cx=272 cy=300 R=120 r=60`. stem 하단이 bowl center y와 일치해 좌측 아래로 stem 자취 없음. 두께 60 일정.
+
+**Agent Notes**
+
+- **Director**: 7 커밋 + 6번 prod 수동 배포. PWA storage partitioning은 큰 데이터 손상 위험이었지만 사전 차단 완료. 사용자의 시각적 정정("기둥이 기니까 동그라미가 작잖아", "왼쪽 아래 삐짐", "오른쪽 위로 1픽셀") 매 사이클 빠르게 반영. 사용자 push 명시 승인("ok", "수고했어 #end") 패턴 일관.
+- **Frontend**: `bootstrapState` 4-state 패턴은 외부 source가 데이터 무결성에 관여하는 다른 시나리오에도 적용 가능. 예: 향후 기기 이동 시나리오, 백업 복원 흐름. `setup()`의 최후 방어선처럼 UI 분기 + 코드 가드 이중 패턴은 보안 critical 경로에 일반화 가능.
+- **Designer**: favicon b SVG는 두 element(rect + path) 결합. stem rect + bowl evenodd path. 두 fill="#f0f0f0" 합쳐서 b 모양. stem 우측이 bowl 안쪽 원 좌측에 정렬되면 안쪽 구멍 깨끗. stem 하단을 bowl center y에 맞추면 왼쪽 아래 stem 자취 없음. 같은 기법으로 다른 글자(d, p, q)도 표현 가능.
+- **사용자 피드백**:
+  - PWA 데이터 손상: "구조 개선이 최우선" + "둘 다 적용"(settings pull 대기 + entities 검사) — 한 번에 안전 최대화 선택. 이번 차단 작업의 가이드라인.
+  - favicon 반복 조정: 사용자가 시각적으로 정확히 짚어줌. 코드보다 시각이 먼저, 매 변경 후 PNG 결과 보여주고 받는 패턴 효과적. 1픽셀 단위 보정 요청 시 작은 표시 사이즈(16~32px)를 SVG 단위(16~32배)로 변환 필요.
+- **환경**: dev :3003 PID 새로 띄움(background task `b5ww04vtq`, `PATH="/opt/homebrew/bin:$PATH" PORT=3003 npm run dev`). Node v25.8.1. Vercel CLI 51.2.1 → 54.2.0 outdated 메시지 지속. 마지막 commit `29ceed3`, prod alias `pro03note.vercel.app` Ready.
+
+---
+
 ## 🕒 Checkpoint — 2026-05-20 (디자인 시스템 전환 + 라이트 톤 정리 + favicon b + 블릿 헤딩 fix)
 
 **Current Milestone**: `@minnjii/dx-kit` → `@plus-experience/design-system` 마이그레이션 + 라이트 모드 zinc 토큰 정렬 + 노트 상세 툴바 간격 0 + favicon "b"로 재구성 + 블릿 안 헤딩↔본문 전환 버그 fix. 3 커밋(`6b20f9b`, `63308ce`, `61acb3c`), prod 수동 배포 1회(`pro03note-jw1mzp0zb`).
