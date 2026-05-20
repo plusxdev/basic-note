@@ -1,4 +1,4 @@
-const CACHE_NAME = "just-note-v1";
+const CACHE_NAME = "basic-note-v2";
 
 const PRECACHE_URLS = ["/", "/notes"];
 
