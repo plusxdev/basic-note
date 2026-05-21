@@ -42,7 +42,8 @@ export default function RootLayout({
     >
       <head>
         <meta name="referrer" content="no-referrer" />
-        <meta name="theme-color" content="#09090b" />
+        <meta name="theme-color" content="#f7f7f8" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
         <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
         <link
