@@ -4,6 +4,63 @@
 
 ---
 
+## 🕒 Checkpoint — 2026-05-22 (Vercel 자동 배포 복구 + 헤딩 caret 상태 표시 + 미결 정리)
+
+**Current Milestone**: 직전 세션 Known Gap이었던 GitHub→Vercel Git Integration 끊김을 대시보드 reconnect로 복구, push 2회로 자동 배포 정상 동작 검증. theme-color carry-over(다크/라이트 prefers-color-scheme 분기)와 헤딩 사이즈 드롭다운 활성 표시 + 캐럿 복원 작업까지 처리. 모바일 사이드바 진입점은 이미 해결되어 있던 상태(메모리 22일 stale)임을 확인하고 메모리 정리. dev 빈 포트 정책 신규 메모리화. 4 커밋(`be1d19f`, `043fbd3`, `a8f99cc`, `095d628`) prod 자동 배포.
+
+**Key Achievements**
+
+- **Vercel ↔ GitHub App 재연결 (대시보드 트랙)** — 직전 세션 Pending이었던 자동 배포 끊김 진단:
+  - `gh api /repos/plusxdev/pro-03-note/hooks` → `[]` (webhook 비어있음, Vercel GitHub App 권한 빠진 상태)
+  - 대시보드 Settings → Git에서 GitHub/GitLab/Bitbucket 버튼만 노출(Not Connected)
+  - GitHub 버튼 클릭 → repo 목록에 design-system만 떠서 `https://github.com/settings/installations` Vercel → Configure → Repository access에 `pro-03-note` 추가 → 재연결
+  - 검증 push (`be1d19f` theme-color) → `vercel[bot]`이 commit status pending → success(29초) 등록. 두 번째 push (`043fbd3`/`a8f99cc`)도 동일 패턴
+- **theme-color 다크/라이트 분기 (`be1d19f`)** — `app/layout.tsx`의 하드코드 `#09090b`를 `media="(prefers-color-scheme: light)"` / `dark` 두 줄로 교체. 라이트 `#f7f7f8`, 다크 `#0a0a0a` (globals.css 토큰 값에 정렬). next-themes 사용자 토글에는 안 따라가지만 OS 설정 기준 PWA 상태바 색은 합리적
+- **푸터 카피라이트 정리 (`043fbd3` + `a8f99cc`)** — 1차에서 `© 2026 PlusX basic note · Made by Kim Kihyun` 라인 전체 제거(사용자 의도와 어긋남) → 2차에서 `© 2026 PlusX basic note`만 복구. 사용자 직접 수정 요청 즉시 반영
+- **헤딩 사이즈 드롭다운 활성 표시 + 캐럿 복원 (`095d628`)** — A옵션(드롭다운 내부 활성 표시) 선택 + 사용자 후속 요청으로 캐럿 복원까지 진행:
+  - PlainEditor에 `getHeadingLevel()` 추가 — setHeading 탐색 로직 재사용. LI 내부 헤딩까지 감지
+  - PlainEditor에 `saveSelection()` / `restoreSelection()` 추가 — `Range.cloneRange()` ref 저장, editor focus + `addRange` 복원
+  - 노트 상세 사이즈 드롭다운: `onOpenChange(true)` 시 saveSelection + level 측정, `DropdownMenuContent.onCloseAutoFocus={e => e.preventDefault(); restoreSelection()}`, 각 항목 onClick에 `restoreSelection() → setHeading()` 시퀀스
+  - 활성 표시: `<DropdownMenuItem className="justify-between">` + 우측 `<Check />` 조건부
+- **모바일 사이드바 진입점 carry-over 해소 확인** — 메모리(`project_mobile_navigation_gap.md`)가 22일 stale. 코드 점검 결과 `app/notes/layout.tsx` L44-46에 `<span className="contents md:hidden"><SidebarTrigger /></span>`, `app/settings/layout.tsx` L24에도 SidebarTrigger 존재. 노트 상세에서도 notes/layout 헤더가 그대로 위에 보임 → 진입점 항상 노출. 메모리/MEMORY.md 해소 상태로 업데이트
+- **dev 빈 포트 정책 메모리 갱신** — 사용자 환경에서 3000~3001(Google), 3002(Docker), 3003(사용자 다른 용도) 영구 점유 확인. 메모리 `feedback_port.md` 갱신: 3004 이상 빈 포트 선택. 이번 세션은 PORT=3004로 dev 서버 가동
+
+**Pending Tasks**
+
+- **다음 세션 메인 마일스톤 — 사용자 배포 (설치형 셀프호스팅)** — Vercel + Supabase를 사용자별로 띄워서 각자 자기 데이터로 동작하는 설치형 흐름 + 가이드 문서. 신규 메모리 `project_user_deployment.md`에 5단계 시작점 기록. 디자인 시스템 사설 GitHub Packages registry 처리, env trailing LF 가드, RLS migration 자동화가 주요 난점
+- PWA 데이터 정리 테스트 — 사용자 직접 PWA + 앱 삭제 → `pro03note.vercel.app` 재설치 → 정상 unlock 화면 검증 (carry-over, 이제 자동 배포 복구로 매번 수동 prod 안 해도 됨)
+- 손상된 supabase `app_settings` 복원 — PWA 검증 결과에 따라 필요 여부 결정 (carry-over)
+- crypto-provider.tsx 추가 분할 (신규 lifecycle 추가 시, carry-over)
+
+**Known Gaps** (Negative Space)
+
+- **design-system 사설 registry 배포 장벽** — `@plus-experience/design-system`은 `npm.pkg.github.com` 사설 registry. 외부 사용자가 설치형으로 빌드 시 GitHub token 없으면 실패. 사용자 배포 작업의 가장 큰 장애물 — 패키지 공개화 또는 가이드에 명시적 토큰 설정 단계 필요
+- PWA에서 만든 신규 노트 잔재 (carry-over) — supabase `encrypted_entities`에 PWA가 새 키로 암호화한 노트 남아있을 가능성. 사용자 수동 삭제 또는 자동 cleanup 흐름 검토
+- dev 서버 default node 16 문제 (carry-over) — 매번 `PATH="/opt/homebrew/bin:$PATH"` 우회. 환경 영구 fix 미실시
+- design-system 설치 스크립트 globals.css 덮어쓰기 hazard (carry-over)
+- prod 첫 hydration race (carry-over, 한계 수용)
+
+**Technical Decisions**
+
+- **자동 배포 검증 = `gh api /repos/.../commits/<sha>/statuses`** — `check-runs`가 비어있어도 `statuses`에 `vercel[bot]`의 pending/success 박힘. webhook이 GitHub App 방식이라 `/hooks`는 항상 빈 채로 정상. 자동 배포 진단 표준 신호로 사용
+- **`getHeadingLevel()` = setHeading 탐색 로직 재사용** — BLOCK_RE(`/^(H[1-6]|P|DIV|LI)$/`) 동일. LI 내부 헤딩까지 한 단계 더 들어감. 향후 Bold/Italic 등 caret 상태 표시 확장 시 같은 selection → ancestor 패턴
+- **selection 복원 = `Range.cloneRange()` ref + `onCloseAutoFocus={e.preventDefault()}` + 항목 onClick `restoreSelection() → setHeading()`** — Radix DropdownMenu가 트리거로 자동 focus 보내는 동작을 막고 editor로 복원. 향후 다른 popover/dropdown 기반 명령(링크 입력, 색상 선택 등)에 일반 적용 가능한 패턴
+- **theme-color 분기 = `media="(prefers-color-scheme: ...)"` 두 줄** — JS 동적 swap 없이 OS 기준 자동 적용. next-themes 사용자 토글에는 안 맞지만 PWA 상태바 사용성에는 충분
+- **dev 빈 포트 정책 = lsof 스캔 + 3004↑** — 3000~3003 사용자 영구 점유로 메모리 박음. dev 서버 띄우기 전 빈 포트 확인 필수 단계
+
+**Agent Notes**
+
+- **Director**: 4 커밋, 자동 배포 검증 2회. 사용자가 #end 시점 다음 메인 마일스톤(사용자 배포 / 설치형)을 명확히 지정. 메모리 stale 인지 패턴(모바일 sidebar 22일 전 메모리) — 다른 carry-over도 같은 방식으로 재검증 필요할 수 있음. 사용자 푸터 라인 정정 사례에서 보듯 instruction은 항상 더 정확하게 읽어야 함("Made by Kim Kihyun 제거" = 라인 전체가 아니라 그 부분만)
+- **Frontend**: `saveSelection/restoreSelection` 패턴은 contentEditable + 외부 UI(dropdown/popover) 조합의 표준 해법. PlainEditor에 박혀있으므로 향후 링크 입력 popover, 색상 picker, 강조 옵션 dropdown 등에 그대로 재사용. `getHeadingLevel`은 selectionchange 이벤트와 결합하면 트리거 아이콘 자체 swap(옵션 B/C)로 확장 가능
+- **Designer/Publisher**: 드롭다운 항목 활성 표시는 우측 `<Check />` + `justify-between` 패턴이 design-system DropdownMenuItem과 충돌 없음. 다른 dropdown에도 같은 마크업 재사용
+- **사용자 피드백**:
+  - "Made by Kim Kihyun 이거 제거" → 라인 일부만 잘라야 했는데 전체 제거. 즉시 정정 요청 받고 한 사이클 더 push. 한국어 지시의 부분 vs 전체 구분 더 정밀하게 읽기
+  - "3003도 내가 쓰는거야" → 메모리 정책 갱신 트리거. 사용자 환경 변화 즉시 메모리 반영
+  - "큰 영향은 아님"이라고 한 항목도 가벼운 비용이면 진행 권장 → 사용자 승낙 (`saveSelection/restoreSelection`). 작업량/효용 trade-off를 먼저 견적 제시하는 패턴이 효과적
+- **환경**: dev :3004 PID(background task `be8eo95b6`), Node v25.8.1, PATH `/opt/homebrew/bin` prefix. Vercel CLI 51.2.1이 Node v25 + undici 호환성 문제로 일부 명령 ReadableStream 에러(`vercel ls`만 살아있음). v54.3.0 업그레이드 권장됨. 마지막 commit `095d628`, prod 자동 배포 정상화
+
+---
+
 ## 🕒 Checkpoint — 2026-05-21 (PWA 데이터 손상 차단 + 비번 변경 전파 + favicon Beats 비례 + 카피라이트)
 
 **Current Milestone**: iOS PWA partitioned storage로 인한 데이터 손상 시나리오 사전 차단(setup 경로 봉쇄 + 최후 방어선), 비밀번호 변경 다른 기기 자동 전파(unlock 재시도 + app_settings realtime), SW 캐시 v2 bump로 정적 자산 강제 갱신, favicon b 글자를 Beats 스타일 비례로 재설계(bowl 중심·stem 단축·정렬 보정), 설정 페이지 카피라이트 라인 추가. 7 커밋(`1fd6f99`, `63c88bb`, `4d21fa0`, `1231bed`, `fdd867e`, `d4fdf34`, `056e816`, `72aa739`, `29ceed3`), prod 수동 배포 6회+.
