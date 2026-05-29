@@ -4,6 +4,57 @@
 
 ---
 
+## 🕒 Checkpoint — 2026-05-30 (설치형 셀프호스팅 배포 자산 구축 + repo 공개·이름 통일)
+
+**Current Milestone**: 직전 세션 메인 마일스톤이었던 "사용자 배포(설치형 셀프호스팅)"를 본격 착수해 핵심 자산을 완성. 먼저 최대 장벽으로 기록돼 있던 design-system 사설 registry 장벽이 실제로는 해소된 상태(공개 npm)임을 검증하고 `.npmrc` 잔재 제거. 이어 Supabase 스키마 SQL·한국어 SETUP.md·Deploy 버튼·`.env.example`을 작성하고 repo를 PUBLIC 전환. 사용자가 Deploy 버튼으로 만든 복제본과 원본 repo의 이름이 꼬인 것을 정리(복제본 삭제 + 원본 rename `pro-03-note`→`basic-note`). Vercel 프로젝트/도메인도 `basic-note`/`basic-note-works.vercel.app`로 정렬. 5 커밋(`22958c7`, `90acfa5`, `7dac305`, `bf265e0` + rename), 자동 배포 정상 검증.
+
+**Key Achievements**
+
+- **design-system 사설 registry 장벽 = 허상 검증 (`22958c7`)** — `@plus-experience/design-system@0.2.3`이 공개 npm(registry.npmjs.org)에서 토큰 없이 `npm view`로 조회됨. `.npmrc`의 사설 registry 줄은 미사용 `@minnjii` scope뿐(package.json·코드 참조 0건). → 외부 사용자 토큰 없이 빌드 가능. `.npmrc` 파일째 삭제. 직전 세션 Known Gap 1순위 해소
+- **설치형 배포 자산 4종 (`90acfa5`)**:
+  - `supabase/setup.sql` — `encrypted_entities`(id·entity_type·data·updated_at(bigint epoch ms)·deleted) + `app_settings`(id·data·updated_at) 테이블, RLS on + anon full access 정책(SELECT/INSERT/UPDATE/DELETE — reset.ts가 delete 사용), realtime publication add. 전부 멱등(if not exists / drop-create / do-block duplicate_object 무시)
+  - `SETUP.md` — 한국어 단계별: 준비물 → Supabase 생성·SQL 실행·API값 → Deploy 버튼 → 첫 실행 검증 → 트러블슈팅 표(realtime 미설정/env 줄바꿈 %0A/복호화 실패/잠금화면/빌드)
+  - `README.md` — create-next-app 템플릿 전면 교체, 셀프호스팅 개요 + Deploy 버튼
+  - `.env.example` — URL/ANON_KEY 2개 필수 + ENABLE_SYNC 로컬 전용 주석
+- **repo PUBLIC 전환** — git 히스토리 민감정보 스캔 통과(.env.local 한번도 커밋 안 됨, JWT/service_role 하드코딩 0건) 후 `gh repo edit --visibility public`. Deploy 버튼 clone 조건 충족
+- **repo/프로젝트/도메인 네이밍 정리** — 사용자가 Deploy 버튼 테스트로 만든 복제본 `basic-note`(Initial commit 1개, isFork=false)와 원본이 이름 충돌. `delete_repo` 스코프 refresh(사용자 device 인증) 후 복제본 삭제 → 원본 `pro-03-note`→`basic-note` rename. 로컬 remote·`.vercel/project.json` projectName 갱신. Vercel 프로젝트 `basic-note`, 운영 도메인 `basic-note-works.vercel.app`
+- **자동 배포 연속성 검증** — GitHub rename은 repo ID 기반이라 Vercel Git 연결 유지. `7dac305`가 프로젝트 `basic-note`(구 pro_03_note, projectId `prj_uFf8...`)로 success 배포
+- **설치 문서 혼란 제거 (`bf265e0`)** — SETUP.md/README.md의 "로컬 개발" 섹션 삭제(설치하러 온 일반 사용자 혼란 소지). 순수 설치 흐름만 잔류
+
+**Pending Tasks**
+
+- **사용자 측 대시보드 정리** — Deploy 테스트로 생긴 2번째 Vercel 프로젝트 삭제(사용자가 곧 처리 예정). 코드/repo 무관
+- **인앱 업데이트 알림(미구현, 신규)** — 설치자가 GitHub 안 들어가면 새 버전 인지 불가. version.json/GitHub commits API 폴링 + 설정 페이지 "새 버전 있음 → Sync fork" 배너 제안했으나 미착수. 설치형 UX의 다음 후보
+- PWA 재설치 정상 unlock 검증 (carry-over)
+- supabase `app_settings`/잔재 노트 정리 (carry-over, PWA 검증 결과 따라)
+- crypto-provider.tsx 추가 분할 (carry-over)
+
+**Known Gaps** (Negative Space)
+
+- **인앱 업데이트 알림 부재** — fork 기반 셀프호스팅은 원본 push가 설치자에게 자동 통지 안 됨(GitHub Watch도 fork엔 미적용). 앱 내 버전 체크 배너가 없으면 설치자는 옛 버전 고착. 미구현
+- **"Sync fork로 업데이트 받는 법" 문서 부재** — SETUP.md에 업데이트 수령 단락 없음. 추가 제안했으나 미반영
+- dev 서버 default node 16 문제 (carry-over) — 매번 PATH 우회
+- design-system 설치 스크립트 globals.css 덮어쓰기 hazard (carry-over)
+
+**Technical Decisions**
+
+- **설치형 모델 = GitHub public repo + Vercel Deploy 버튼 + Supabase setup.sql 붙여넣기**. npm publish 아님. 앱(웹/PWA)은 "서버에 띄워 URL 접속"이라 CLI 패키지와 배포 방식이 근본적으로 다름. Deploy 버튼은 fork가 아니라 히스토리를 단일 Initial commit으로 압축한 새 repo를 생성(원본과 분리 → 원본 push 자동 반영 안 됨)
+- **RLS on + anon full access**가 정책. 평문 보호는 RLS가 아니라 클라이언트 E2E 암호화(AES-256-GCM)가 담당. anon key는 NEXT_PUBLIC이라 어차피 공개 — 비밀 아님. 필수 env는 URL/ANON_KEY 2개(ENABLE_SYNC는 prod NODE_ENV로 자동)
+- **네이밍 정렬**: GitHub repo=`basic-note`, Vercel 프로젝트=`basic-note`, 운영 도메인=`basic-note-works.vercel.app`. 코드/문서에 도메인·프로젝트명 하드코딩 0건(manifest start_url 상대경로, metadataBase 미정의 → host-relative)이라 도메인 변경에 코드 영향 없음
+- **GitHub repo rename = Vercel 연결 투명 유지** — repo ID 기반. rename/공개전환 후에도 기존 Vercel 프로젝트가 자동 배포 지속. `.vercel/project.json`은 projectId 기준 동작(projectName은 표시용 stale 가능, gitignore라 로컬 전용)
+
+**Agent Notes**
+
+- **Director**: 5 커밋, repo 공개·rename·복제본 삭제까지 형상 큰 변경 다수. 비가역 작업(public 전환, repo 삭제) 전마다 검증/승인 선행 패턴 유지. 사용자가 Deploy 버튼을 직접 눌러 실설치 검증 → 그 과정에서 복제본 repo가 생겨 네이밍 충돌 발생한 사례는, 가이드 자산을 만들면 사용자가 즉시 실사용해 부작용이 드러난다는 신호. 다음에도 산출물 직후 실환경 충돌 가능성 미리 짚기
+- **Backend/Frontend**: setup.sql의 컬럼 타입은 engine.ts/reset.ts에서 역산(updated_at=bigint epoch ms, data=text JSON, delete 권한 필요). 스키마가 코드에만 있고 SQL이 없던 상태를 이번에 SQL로 고정 — 향후 스키마 변경 시 setup.sql 동기 갱신 필수(드리프트 주의)
+- **사용자 피드백**:
+  - "npm 가입해서 패키지 배포하는거냐?" — 설치형=npm publish 오해. 웹앱 셀프호스팅 모델을 명확히 구분 설명 필요했음
+  - "로컬 개발 섹션 헷갈리니 삭제" — 설치 가이드는 설치자 시점만. 개발자 안내 혼입이 혼란. 문서 대상 독자 분리 원칙
+  - 도메인/repo/프로젝트 이름을 단계적으로 바꿔가며 정렬 — 사용자가 네이밍 일관성을 중시. 변경 시 연쇄 참조(Deploy URL·remote·package·.vercel) 동시 갱신
+- **환경**: 마지막 commit `bf265e0`, repo `plusxdev/basic-note`(PUBLIC), Vercel 프로젝트 `basic-note`/도메인 `basic-note-works.vercel.app`, 자동 배포 정상. gh 토큰에 `delete_repo` 스코프 추가됨
+
+---
+
 ## 🕒 Checkpoint — 2026-05-22 (Vercel 자동 배포 복구 + 헤딩 caret 상태 표시 + 미결 정리)
 
 **Current Milestone**: 직전 세션 Known Gap이었던 GitHub→Vercel Git Integration 끊김을 대시보드 reconnect로 복구, push 2회로 자동 배포 정상 동작 검증. theme-color carry-over(다크/라이트 prefers-color-scheme 분기)와 헤딩 사이즈 드롭다운 활성 표시 + 캐럿 복원 작업까지 처리. 모바일 사이드바 진입점은 이미 해결되어 있던 상태(메모리 22일 stale)임을 확인하고 메모리 정리. dev 빈 포트 정책 신규 메모리화. 4 커밋(`be1d19f`, `043fbd3`, `a8f99cc`, `095d628`) prod 자동 배포.
