@@ -15,7 +15,7 @@
 
 원클릭 배포:
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fplusxdev%2Fpro-03-note&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY&envDescription=Supabase%20%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%EC%9D%98%20URL%EA%B3%BC%20anon%20key&envLink=https%3A%2F%2Fgithub.com%2Fplusxdev%2Fpro-03-note%2Fblob%2Fmain%2FSETUP.md&project-name=basic-note&repository-name=basic-note)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fplusxdev%2Fbasic-note&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY&envDescription=Supabase%20%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%EC%9D%98%20URL%EA%B3%BC%20anon%20key&envLink=https%3A%2F%2Fgithub.com%2Fplusxdev%2Fbasic-note%2Fblob%2Fmain%2FSETUP.md&project-name=basic-note&repository-name=basic-note)
 
 > 배포 전에 Supabase 프로젝트를 만들고 `supabase/setup.sql`을 실행해야 합니다. 순서와 환경변수는 [SETUP.md](./SETUP.md) 참고.
 
