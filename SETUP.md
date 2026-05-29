@@ -72,20 +72,6 @@
 
 ---
 
-## (선택) 로컬에서 개발하기
-
-```bash
-git clone https://github.com/<본인>/basic-note.git
-cd basic-note
-npm install
-cp .env.example .env.local   # 그리고 .env.local에 본인 Supabase 값 입력
-npm run dev
-```
-
-로컬 dev는 기본적으로 동기화가 **꺼져** 있습니다(prod Supabase 오염 방지). 로컬에서도 동기화를 테스트하려면 `.env.local`에 `NEXT_PUBLIC_ENABLE_SYNC=true`를 추가하세요. 단, dev와 prod가 같은 Supabase를 쓰면 서로 다른 키로 암호화된 데이터가 섞여 "복호화 실패" 항목이 생길 수 있으니, 개발용은 **별도 Supabase 프로젝트**를 권장합니다.
-
----
-
 ## 트러블슈팅
 
 | 증상 | 원인 / 해결 |

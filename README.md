@@ -21,18 +21,6 @@
 
 ---
 
-## 로컬 개발
-
-```bash
-git clone https://github.com/<본인>/basic-note.git
-cd basic-note
-npm install
-cp .env.example .env.local   # .env.local에 본인 Supabase 값 입력
-npm run dev
-```
-
-자세한 내용과 동기화 동작은 [SETUP.md](./SETUP.md)의 "로컬에서 개발하기"를 참고하세요.
-
 ## 기술 스택
 
 Next.js (App Router) · TypeScript · Tailwind CSS v4 · Supabase · Dexie(IndexedDB) · [@plus-experience/design-system](https://www.npmjs.com/package/@plus-experience/design-system)
